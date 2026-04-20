@@ -8,7 +8,7 @@ const getMovs = () => JSON.parse(localStorage.getItem(KEY_MOVS) || "[]");
 const setMovs = (m) => localStorage.setItem(KEY_MOVS, JSON.stringify(m));
 const getValorHora = () => Number(localStorage.getItem(KEY_VALOR) || 19000);
 const setValorHora = (v) => localStorage.setItem(KEY_VALOR, String(v));
-const getCheckTime = () => localStorage.getItem(KEY_CHECK) || "20:27";
+const getCheckTime = () => localStorage.getItem(KEY_CHECK) || "20:30";
 const setCheckTime = (t) => localStorage.setItem(KEY_CHECK, t);
 
 // ==== Format ====
@@ -322,5 +322,7 @@ if ("serviceWorker" in navigator) {
 }
 
 // ==== Boot ====
-if (!localStorage.getItem(KEY_CHECK)) setCheckTime("20:27");
+if (!localStorage.getItem(KEY_CHECK) || localStorage.getItem(KEY_CHECK) === "20:27") {
+  setCheckTime("20:30");
+}
 showLock();
