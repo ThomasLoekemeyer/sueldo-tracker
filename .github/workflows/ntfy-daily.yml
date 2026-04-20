@@ -18,10 +18,11 @@ jobs:
           TOPIC: ${{ secrets.NTFY_TOPIC }}
           APP_URL: https://thomasloekemeyer.github.io/sueldo-tracker/
         run: |
+          FECHA=$(TZ=America/Argentina/Buenos_Aires date +%d/%m)
           curl -fsS -X POST "https://ntfy.sh/${TOPIC}" \
-            -H "Title: Control diario de jornada" \
+            -H "Title: Trabajo ${FECHA}" \
             -H "Priority: high" \
             -H "Tags: briefcase,alarm_clock" \
             -H "Click: ${APP_URL}" \
-            -H "Actions: view, Sí 9hs, ${APP_URL}?action=confirm9to18, clear=true; view, Editar, ${APP_URL}?action=editar, clear=true" \
-            -d "¿Trabajaste hoy de 9 a 18hs? Tocá un botón para actualizar el saldo."
+            -H "Actions: view, Confirmar, ${APP_URL}?action=confirm9to18, clear=true; view, Editar, ${APP_URL}?action=editar, clear=true" \
+            -d "Trabajaste 9 a 18hs?"
