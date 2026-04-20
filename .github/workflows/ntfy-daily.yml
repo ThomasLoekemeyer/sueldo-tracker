@@ -1,0 +1,27 @@
+name: Control diario (ntfy)
+
+on:
+  schedule:
+    # 20:30 AR = 23:30 UTC (Argentina es UTC-3, sin DST)
+    - cron: "30 23 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Enviar notificación ntfy
+        env:
+          TOPIC: ${{ secrets.NTFY_TOPIC }}
+          APP_URL: https://thomasloekemeyer.github.io/sueldo-tracker/
+        run: |
+          curl -fsS -X POST "https://ntfy.sh/${TOPIC}" \
+            -H "Title: Control diario de jornada" \
+            -H "Priority: high" \
+            -H "Tags: briefcase,alarm_clock" \
+            -H "Click: ${APP_URL}" \
+            -H "Actions: view, Sí 9hs, ${APP_URL}?action=confirm9to18, clear=true; view, Editar, ${APP_URL}?action=editar, clear=true" \
+            -d "¿Trabajaste hoy de 9 a 18hs? Tocá un botón para actualizar el saldo."

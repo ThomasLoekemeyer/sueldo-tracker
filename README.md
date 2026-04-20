@@ -1,6 +1,6 @@
 # Sueldo Tracker
 
-**URL:** https://loekemeyer.github.io/sueldo-tracker/
+**URL:** https://thomasloekemeyer.github.io/sueldo-tracker/
 
 PWA personal para trackear sueldo. Se instala en el iPhone como una app, se desbloquea con Face ID y guarda todo localmente en el celular.
 
@@ -27,25 +27,32 @@ PWA personal para trackear sueldo. Se instala en el iPhone como una app, se desb
 - **Exportar** → baja un CSV con todos los movimientos.
 - **Editar valor hora** → footer, tocás "Editar" y cambiás el valor (se aplica a los movimientos nuevos; los viejos quedan con el valor del momento).
 
-## Atajo diario "9 a 18hs"
+## Notificación diaria vía ntfy.sh
 
-Configurá un atajo en iOS para que todos los días a las 18hs te pregunte si trabajaste la jornada completa y, con un toque, registre 9 hs automáticamente.
+Todos los días a las 20:30 (AR) te llega un push real al iPhone preguntando si trabajaste 9 a 18hs, con botones para confirmar o editar.
 
-### Pasos
+### Setup (una vez)
 
-1. Abrí la app **Atajos** (ya viene con iOS).
-2. Pestaña **Automatización** → **+** (arriba a la derecha) → **Crear automatización personal**.
-3. **Hora del día** → 18:00 → Diariamente → Siguiente.
-4. "Ejecutar inmediatamente" activado (así no te pide confirmación cada vez).
-5. Agregá acción: **Pedir menú** con el texto "¿Trabajaste hoy 9-18hs?" y opciones:
-   - `Sí, 9hs`
-   - `Editar horas`
-   - `No trabajé`
-6. Para cada rama:
-   - **Sí, 9hs** → Acción **Abrir URL** → `https://loekemeyer.github.io/sueldo-tracker/?action=confirm9to18`
-   - **Editar horas** → Acción **Abrir URL** → `https://loekemeyer.github.io/sueldo-tracker/?action=editar`
-   - **No trabajé** → no hacer nada.
-7. Guardá.
+1. Instalá la app **ntfy** desde el App Store (gratis).
+2. Abrila, tocá **+** para agregar una suscripción.
+3. Desactivá "Use another server" (dejá el default `ntfy.sh`).
+4. En "Topic" pegá: `sueldo-thomas-70e02ec5b389`
+5. Activá las notificaciones cuando te las pida iOS.
+6. Listo. De ahí en más a las 20:30 te llega la notificación como push nativo.
+
+### Cómo funciona
+
+- El workflow `.github/workflows/ntfy-daily.yml` corre todos los días a las 23:30 UTC (= 20:30 AR).
+- Manda un POST a `ntfy.sh/<topic>` con el mensaje y dos action buttons.
+- Tocás **"Sí, 9hs"** → abre la PWA con `?action=confirm9to18` → se registra la jornada y se actualiza el saldo.
+- Tocás **"Editar"** → abre la PWA con `?action=editar` → te pide la cantidad de horas manualmente.
+
+### Cambiar el horario
+
+Editá el `cron` en `.github/workflows/ntfy-daily.yml`:
+- `30 23 * * *` = 20:30 AR (UTC-3)
+- Si querés 18:00 AR, usá `0 21 * * *`
+- Para pruebas rápidas también podés disparar el workflow a mano desde la pestaña **Actions** del repo.
 
 
 ## Estructura
