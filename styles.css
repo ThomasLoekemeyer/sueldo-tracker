@@ -115,6 +115,7 @@ input {
 }
 input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
 .preview { color: var(--accent); font-size: 14px; min-height: 18px; font-weight: 500; }
+.hint { color: var(--muted); font-size: 12px; text-align: center; margin: 10px 0 0; }
 
 button {
   font-family: inherit;
@@ -172,4 +173,6 @@ li {
   align-items: center;
   font-size: 13px;
   color: var(--muted);
+  gap: 12px;
 }
+.footer-col { display: flex; flex-direction: column; gap: 2px; }

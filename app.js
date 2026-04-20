@@ -2,19 +2,19 @@
 const KEY_MOVS = "sueldo.movimientos";
 const KEY_CRED = "sueldo.credId";
 const KEY_VALOR = "sueldo.valorHora";
+const KEY_CHECK = "sueldo.checkTime";
 
 const getMovs = () => JSON.parse(localStorage.getItem(KEY_MOVS) || "[]");
 const setMovs = (m) => localStorage.setItem(KEY_MOVS, JSON.stringify(m));
 const getValorHora = () => Number(localStorage.getItem(KEY_VALOR) || 19000);
 const setValorHora = (v) => localStorage.setItem(KEY_VALOR, String(v));
+const getCheckTime = () => localStorage.getItem(KEY_CHECK) || "20:27";
+const setCheckTime = (t) => localStorage.setItem(KEY_CHECK, t);
 
 // ==== Format ====
 const fmt = (n) => "$" + Math.round(n).toLocaleString("es-AR");
 const hoyISO = () => new Date().toISOString().slice(0, 10);
-const hoyLabel = () => {
-  const d = new Date();
-  return d.toLocaleDateString("es-AR", { day: "2-digit", month: "short" });
-};
+const hoyLabel = () => new Date().toLocaleDateString("es-AR", { day: "2-digit", month: "short" });
 
 // ==== WebAuthn (Face ID) ====
 const b64urlEncode = (buf) => btoa(String.fromCharCode(...new Uint8Array(buf)))
@@ -79,11 +79,13 @@ function showApp() {
   appScreen.classList.remove("hidden");
   render();
   checkConfirmBanner();
+  startBannerPolling();
 }
 
 function showLock(message) {
   appScreen.classList.add("hidden");
   lockScreen.classList.remove("hidden");
+  stopBannerPolling();
   const hasCred = !!localStorage.getItem(KEY_CRED);
   btnUnlock.classList.toggle("hidden", !hasCred);
   btnSetup.classList.toggle("hidden", hasCred);
@@ -114,51 +116,51 @@ btnSetup.addEventListener("click", async () => {
 
 $("btn-lock").addEventListener("click", () => showLock());
 
-// ==== Add form ====
-let tipoActivo = "horas";
+// ==== Add form (solo ingreso / egreso) ====
+let tipoActivo = "ingreso";
 const tabs = document.querySelectorAll(".tab");
 const inputValor = $("input-valor");
 const inputDesc = $("input-desc");
-const inputSuffix = $("input-suffix");
-const previewMonto = $("preview-monto");
 
 function setTipo(t) {
   tipoActivo = t;
   tabs.forEach(tab => tab.classList.toggle("active", tab.dataset.tipo === t));
-  inputSuffix.textContent = t === "horas" ? "hs" : "$";
-  inputValor.placeholder = t === "horas" ? "Cantidad de horas" : "Monto";
-  updatePreview();
 }
 tabs.forEach(tab => tab.addEventListener("click", () => setTipo(tab.dataset.tipo)));
 
-function updatePreview() {
-  const v = Number(inputValor.value);
-  if (!v || tipoActivo !== "horas") { previewMonto.textContent = ""; return; }
-  previewMonto.textContent = `= ${fmt(v * getValorHora())}`;
-}
-inputValor.addEventListener("input", updatePreview);
-
 $("form-add").addEventListener("submit", (e) => {
   e.preventDefault();
-  const v = Number(inputValor.value);
-  if (!v || v <= 0) return;
-  const desc = inputDesc.value.trim();
-  agregarMov(tipoActivo, v, desc);
+  const monto = Number(inputValor.value);
+  if (!monto || monto <= 0) return;
+  const desc = inputDesc.value.trim() || tipoActivo;
+  agregarDinero(tipoActivo, monto, desc);
   inputValor.value = "";
   inputDesc.value = "";
-  updatePreview();
 });
 
-function agregarMov(tipo, valor, desc) {
+function agregarDinero(tipo, monto, desc) {
   const movs = getMovs();
-  const monto = tipo === "horas" ? valor * getValorHora() : valor;
   movs.unshift({
     id: Date.now(),
     fecha: new Date().toISOString(),
     tipo,
-    horas: tipo === "horas" ? valor : null,
+    horas: null,
     monto,
-    desc: desc || (tipo === "horas" ? `${valor}hs` : tipo),
+    desc,
+  });
+  setMovs(movs);
+  render();
+}
+
+function agregarHoras(horas, desc) {
+  const movs = getMovs();
+  movs.unshift({
+    id: Date.now(),
+    fecha: new Date().toISOString(),
+    tipo: "horas",
+    horas,
+    monto: horas * getValorHora(),
+    desc,
   });
   setMovs(movs);
   render();
@@ -177,6 +179,7 @@ function render() {
   saldoEl.classList.toggle("negativo", saldo < 0);
 
   $("valor-hora-label").textContent = fmt(getValorHora());
+  $("check-time-label").textContent = getCheckTime();
 
   const ul = $("lista");
   ul.innerHTML = "";
@@ -214,9 +217,16 @@ function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
 
-// ==== Confirm banner (jornada 9-18hs) ====
+// ==== Banner de control diario ====
 function yaRegistroHoras(fechaISODia) {
   return getMovs().some(m => m.tipo === "horas" && m.fecha.slice(0, 10) === fechaISODia);
+}
+
+function pasoHoraControl() {
+  const [hh, mm] = getCheckTime().split(":").map(Number);
+  const now = new Date();
+  const threshold = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hh, mm, 0);
+  return now >= threshold;
 }
 
 function checkConfirmBanner() {
@@ -226,50 +236,76 @@ function checkConfirmBanner() {
   const hoy = hoyISO();
 
   if (accion === "confirm9to18" && !yaRegistroHoras(hoy)) {
-    agregarMov("horas", 9, `Jornada ${hoyLabel()} (9-18hs)`);
+    agregarHoras(9, `Jornada ${hoyLabel()} (9-18hs)`);
     history.replaceState({}, "", location.pathname);
+    banner.classList.add("hidden");
     return;
   }
   if (accion === "editar") {
-    setTipo("horas");
-    inputValor.focus();
+    promptHorasCustom();
     history.replaceState({}, "", location.pathname);
     return;
   }
-  if (!yaRegistroHoras(hoy)) {
+
+  if (!yaRegistroHoras(hoy) && pasoHoraControl()) {
     banner.classList.remove("hidden");
   } else {
     banner.classList.add("hidden");
   }
 }
 
-$("btn-confirm-si").addEventListener("click", () => {
-  agregarMov("horas", 9, `Jornada ${hoyLabel()} (9-18hs)`);
-  $("banner-confirm").classList.add("hidden");
-});
-$("btn-confirm-editar").addEventListener("click", () => {
-  setTipo("horas");
-  inputValor.focus();
-  $("banner-confirm").classList.add("hidden");
+let bannerInterval = null;
+function startBannerPolling() {
+  stopBannerPolling();
+  bannerInterval = setInterval(checkConfirmBanner, 30000);
+}
+function stopBannerPolling() {
+  if (bannerInterval) { clearInterval(bannerInterval); bannerInterval = null; }
+}
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden && !appScreen.classList.contains("hidden")) checkConfirmBanner();
 });
 
-// ==== Config valor hora ====
+function promptHorasCustom() {
+  const txt = prompt("¿Cuántas horas trabajaste hoy?", "9");
+  if (!txt) return;
+  const h = Number(txt);
+  if (!h || h <= 0) { alert("Valor inválido"); return; }
+  const desc = prompt("Descripción (opcional):", `Jornada ${hoyLabel()}`) || `Jornada ${hoyLabel()}`;
+  agregarHoras(h, desc);
+  $("banner-confirm").classList.add("hidden");
+}
+
+$("btn-confirm-si").addEventListener("click", () => {
+  agregarHoras(9, `Jornada ${hoyLabel()} (9-18hs)`);
+  $("banner-confirm").classList.add("hidden");
+});
+$("btn-confirm-editar").addEventListener("click", promptHorasCustom);
+
+// ==== Config ====
 $("btn-config").addEventListener("click", () => {
-  const nuevo = prompt("Nuevo valor hora (en pesos):", String(getValorHora()));
-  if (!nuevo) return;
-  const n = Number(nuevo);
-  if (!n || n <= 0) { alert("Valor inválido"); return; }
-  setValorHora(n);
+  const nuevoValor = prompt("Valor hora (en pesos):", String(getValorHora()));
+  if (nuevoValor === null) return;
+  const n = Number(nuevoValor);
+  if (n && n > 0) setValorHora(n);
+
+  const nuevaHora = prompt("Horario del control diario (HH:MM):", getCheckTime());
+  if (nuevaHora === null) { render(); return; }
+  if (/^\d{1,2}:\d{2}$/.test(nuevaHora.trim())) {
+    const [h, m] = nuevaHora.trim().split(":").map(Number);
+    if (h >= 0 && h < 24 && m >= 0 && m < 60) {
+      setCheckTime(`${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`);
+    }
+  }
   render();
+  checkConfirmBanner();
 });
 
 // ==== Export ====
 $("btn-export").addEventListener("click", () => {
   const movs = getMovs();
   const rows = [["fecha", "tipo", "horas", "monto", "descripcion"]];
-  for (const m of movs) {
-    rows.push([m.fecha, m.tipo, m.horas || "", m.monto, m.desc]);
-  }
+  for (const m of movs) rows.push([m.fecha, m.tipo, m.horas || "", m.monto, m.desc]);
   const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
   const blob = new Blob([csv], { type: "text/csv" });
   const url = URL.createObjectURL(blob);
@@ -286,4 +322,5 @@ if ("serviceWorker" in navigator) {
 }
 
 // ==== Boot ====
+if (!localStorage.getItem(KEY_CHECK)) setCheckTime("20:27");
 showLock();

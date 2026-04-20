@@ -44,19 +44,18 @@
 
   <section class="add-section">
     <div class="tabs">
-      <button class="tab active" data-tipo="horas">Horas</button>
-      <button class="tab" data-tipo="ingreso">Ingreso</button>
+      <button class="tab active" data-tipo="ingreso">Ingreso</button>
       <button class="tab" data-tipo="egreso">Egreso</button>
     </div>
     <form id="form-add">
       <div class="row">
-        <input type="number" id="input-valor" step="0.5" min="0" placeholder="Cantidad" required inputmode="decimal">
-        <span id="input-suffix" class="suffix">hs</span>
+        <input type="number" id="input-valor" step="100" min="0" placeholder="Monto" required inputmode="decimal">
+        <span class="suffix">$</span>
       </div>
       <input type="text" id="input-desc" placeholder="Descripción (opcional)">
-      <div id="preview-monto" class="preview"></div>
       <button type="submit" class="primary">Agregar</button>
     </form>
+    <p class="hint">Las horas se cargan solo por el control diario.</p>
   </section>
 
   <section class="list-section">
@@ -68,7 +67,10 @@
   </section>
 
   <div class="footer-info">
-    <span>Valor hora: <strong id="valor-hora-label">$19.000</strong></span>
+    <div class="footer-col">
+      <span>Valor hora: <strong id="valor-hora-label">$19.000</strong></span>
+      <span>Control diario: <strong id="check-time-label">20:27</strong></span>
+    </div>
     <button id="btn-config" class="ghost small">Editar</button>
   </div>
 </div>
