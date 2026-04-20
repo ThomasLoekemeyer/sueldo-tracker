@@ -1,5 +1,7 @@
 # Sueldo Tracker
 
+**URL:** https://loekemeyer.github.io/sueldo-tracker/
+
 PWA personal para trackear sueldo. Se instala en el iPhone como una app, se desbloquea con Face ID y guarda todo localmente en el celular.
 
 - **Valor hora inicial:** $19.000 (editable desde la app)
@@ -40,12 +42,11 @@ Configurá un atajo en iOS para que todos los días a las 18hs te pregunte si tr
    - `Editar horas`
    - `No trabajé`
 6. Para cada rama:
-   - **Sí, 9hs** → Acción **Abrir URL** → `https://<TU-USUARIO>.github.io/<NOMBRE-REPO>/?action=confirm9to18`
-   - **Editar horas** → Acción **Abrir URL** → `https://<TU-USUARIO>.github.io/<NOMBRE-REPO>/?action=editar`
+   - **Sí, 9hs** → Acción **Abrir URL** → `https://loekemeyer.github.io/sueldo-tracker/?action=confirm9to18`
+   - **Editar horas** → Acción **Abrir URL** → `https://loekemeyer.github.io/sueldo-tracker/?action=editar`
    - **No trabajé** → no hacer nada.
 7. Guardá.
 
-La URL real la vas a tener después del deploy, reemplazás el placeholder.
 
 ## Estructura
 
