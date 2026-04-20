@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Sueldo">
+  <meta name="theme-color" content="#0f172a">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="icon-180.png">
+  <link rel="stylesheet" href="styles.css">
+  <title>Sueldo</title>
+</head>
+<body>
+
+<div id="lock-screen" class="screen">
+  <div class="lock-content">
+    <div class="lock-icon">🔒</div>
+    <h1>Sueldo</h1>
+    <p id="lock-msg">Desbloqueá con Face ID</p>
+    <button id="btn-unlock" class="primary">Desbloquear</button>
+    <button id="btn-setup" class="ghost hidden">Configurar Face ID</button>
+    <p id="lock-error" class="error"></p>
+  </div>
+</div>
+
+<div id="app" class="screen hidden">
+  <header>
+    <div>
+      <div class="label">Saldo actual</div>
+      <div id="saldo" class="saldo">$0</div>
+    </div>
+    <button id="btn-lock" class="icon-btn" aria-label="Bloquear">🔒</button>
+  </header>
+
+  <div id="banner-confirm" class="banner hidden">
+    <span>¿Trabajaste hoy de 9 a 18hs?</span>
+    <div class="banner-actions">
+      <button id="btn-confirm-si" class="primary small">Sí, 9hs</button>
+      <button id="btn-confirm-editar" class="ghost small">Editar</button>
+    </div>
+  </div>
+
+  <section class="add-section">
+    <div class="tabs">
+      <button class="tab active" data-tipo="horas">Horas</button>
+      <button class="tab" data-tipo="ingreso">Ingreso</button>
+      <button class="tab" data-tipo="egreso">Egreso</button>
+    </div>
+    <form id="form-add">
+      <div class="row">
+        <input type="number" id="input-valor" step="0.5" min="0" placeholder="Cantidad" required inputmode="decimal">
+        <span id="input-suffix" class="suffix">hs</span>
+      </div>
+      <input type="text" id="input-desc" placeholder="Descripción (opcional)">
+      <div id="preview-monto" class="preview"></div>
+      <button type="submit" class="primary">Agregar</button>
+    </form>
+  </section>
+
+  <section class="list-section">
+    <div class="list-header">
+      <h2>Movimientos</h2>
+      <button id="btn-export" class="ghost small">Exportar</button>
+    </div>
+    <ul id="lista"></ul>
+  </section>
+
+  <div class="footer-info">
+    <span>Valor hora: <strong id="valor-hora-label">$19.000</strong></span>
+    <button id="btn-config" class="ghost small">Editar</button>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
