@@ -1,5 +1,5 @@
 // ==== Config ====
-const APP_VERSION = "1.2";
+const APP_VERSION = "1.3";
 const SB_URL = "https://ljwlanwmnuqgxftlirhh.supabase.co";
 const SB_KEY = "sb_publishable_niVre5BYps9QZVh4qq0UtQ_mMmCrIV0";
 
@@ -243,7 +243,7 @@ async function quickConfirmar() {
     } else {
       await showQuick("✓", "Registrado", `${count} jornadas × 9hs = ${fmt(total)}`);
     }
-    setTimeout(() => window.close(), 1500);
+    setTimeout(() => window.close(), 4000);
   } catch (e) {
     await showQuick("⚠️", "Error", `No se pudo registrar: ${e.message}`);
   }
@@ -262,7 +262,7 @@ async function quickSueldo() {
       desc: `Sueldo ${mes} (incluye +$1M)`,
     });
     await showQuick("✓", "Sueldo registrado", `${fmt(monto)} sumado al saldo.`);
-    setTimeout(() => window.close(), 1500);
+    setTimeout(() => window.close(), 4000);
   } catch (e) {
     await showQuick("⚠️", "Error", e.message);
   }
@@ -270,7 +270,7 @@ async function quickSueldo() {
 
 async function quickComision() {
   const txt = prompt("Monto total de comisiones este mes:", "");
-  if (!txt) { await showQuick("✓", "Cancelado", ""); setTimeout(() => window.close(), 1500); return; }
+  if (!txt) { await showQuick("✓", "Cancelado", ""); setTimeout(() => window.close(), 4000); return; }
   const n = Number(txt);
   if (!n || n <= 0) { await showQuick("⚠️", "Inválido", "Monto inválido"); return; }
   await showQuick("⏳", "Registrando comisión...", "");
@@ -284,7 +284,7 @@ async function quickComision() {
       desc: `Comisiones ${mes}`,
     });
     await showQuick("✓", "Comisión registrada", `${fmt(n)} sumado al saldo.`);
-    setTimeout(() => window.close(), 1500);
+    setTimeout(() => window.close(), 4000);
   } catch (e) {
     await showQuick("⚠️", "Error", e.message);
   }
@@ -307,7 +307,7 @@ async function quickEditar() {
       desc,
     });
     await showQuick("✓", "Jornada registrada", `${h}hs × ${fmt(valor)} = ${fmt(h * valor)}`);
-    setTimeout(() => window.close(), 1500);
+    setTimeout(() => window.close(), 4000);
   } catch (e) {
     await showQuick("⚠️", "Error", `No se pudo registrar: ${e.message}`);
   }
@@ -398,7 +398,7 @@ function updateCompraPreview() {
   const precio = Number(inputPrecio.value);
   const preview = $("preview-total");
   if (cant && precio) {
-    preview.textContent = `Total: ${fmt(cant * precio)} (se descuenta del saldo)`;
+    preview.textContent = `Total ${fmt(cant * precio)} (sale del saldo)`;
   } else {
     preview.textContent = "";
   }

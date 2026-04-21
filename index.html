@@ -107,11 +107,25 @@
         <input type="text" id="input-desc" placeholder="Descripción (opcional)">
       </div>
       <div class="fields-compra hidden">
-        <input type="text" id="input-ticker" placeholder="Ticker (SPY, BRKB, USD...)" autocomplete="off">
-        <input type="number" id="input-cantidad" step="0.01" placeholder="Cantidad" inputmode="decimal">
-        <input type="number" id="input-precio" step="0.01" placeholder="Precio ARS por unidad" inputmode="decimal">
-        <input type="date" id="input-fecha">
-        <div id="preview-total" class="preview"></div>
+        <div class="field">
+          <label for="input-ticker">Ticker</label>
+          <input type="text" id="input-ticker" placeholder="SPY, BRKB, USD..." autocomplete="off" autocapitalize="characters">
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label for="input-cantidad">Cantidad</label>
+            <input type="number" id="input-cantidad" step="0.01" placeholder="0" inputmode="decimal">
+          </div>
+          <div class="field">
+            <label for="input-precio">Precio ARS / unidad</label>
+            <input type="number" id="input-precio" step="0.01" placeholder="0" inputmode="decimal">
+          </div>
+        </div>
+        <div class="field">
+          <label for="input-fecha">Fecha de compra</label>
+          <input type="date" id="input-fecha">
+        </div>
+        <div id="preview-total" class="preview-total"></div>
       </div>
       <button type="submit" class="primary">Agregar</button>
     </form>

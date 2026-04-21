@@ -69,7 +69,41 @@ header {
   white-space: nowrap;
 }
 .header-btn:active { background: var(--surface-2); }
-.fields-compra { display: flex; flex-direction: column; gap: 10px; }
+.fields-compra { display: flex; flex-direction: column; gap: 12px; }
+.fields-compra .field { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 0; }
+.fields-compra .field-row { display: flex; gap: 10px; }
+.fields-compra label {
+  font-size: 11px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding-left: 4px;
+  font-weight: 600;
+}
+.fields-compra input {
+  width: 100%;
+}
+.fields-compra input[type="date"] {
+  color-scheme: dark;
+  font-variant-numeric: tabular-nums;
+}
+.fields-compra #input-ticker {
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 600;
+}
+.preview-total {
+  background: var(--bg);
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  padding: 10px 12px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  text-align: center;
+  min-height: 20px;
+}
+.preview-total:empty { display: none; }
 
 .banner {
   background: var(--warning);
