@@ -1,4 +1,4 @@
-const CACHE = "sueldo-v9";
+const CACHE = "sueldo-1.0";
 const ASSETS = [
   "./",
   "./index.html",
@@ -21,6 +21,9 @@ self.addEventListener("activate", (e) => {
 
 self.addEventListener("fetch", (e) => {
   if (e.request.method !== "GET") return;
+  const url = new URL(e.request.url);
+  // Sólo cachear assets same-origin. Cross-origin (Supabase, ntfy) pasa directo a la red.
+  if (url.origin !== self.location.origin) return;
   e.respondWith(
     caches.match(e.request).then(r => r || fetch(e.request).then(resp => {
       const copy = resp.clone();

@@ -176,4 +176,14 @@ li {
   gap: 12px;
 }
 .footer-col { display: flex; flex-direction: column; gap: 2px; align-items: flex-start; }
+.app-version {
+  position: fixed;
+  bottom: calc(env(safe-area-inset-bottom) + 4px);
+  right: 8px;
+  font-size: 10px;
+  color: var(--muted);
+  opacity: 0.5;
+  pointer-events: none;
+  z-index: 1000;
+}
 .vh-link { padding: 0 !important; color: var(--text) !important; border: none !important; background: transparent !important; text-align: left; }

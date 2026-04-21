@@ -1,4 +1,5 @@
 // ==== Config ====
+const APP_VERSION = "1.0";
 const SB_URL = "https://ljwlanwmnuqgxftlirhh.supabase.co";
 const SB_KEY = "sb_publishable_niVre5BYps9QZVh4qq0UtQ_mMmCrIV0";
 
@@ -858,6 +859,12 @@ $("btn-vh-add").addEventListener("click", agregarMesValorHora);
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("sw.js").catch(() => {});
 }
+
+// ==== Version label ====
+(function showVersion() {
+  const el = document.getElementById("app-version");
+  if (el) el.textContent = "v" + APP_VERSION;
+})();
 
 // ==== Boot ====
 (async () => {
