@@ -103,10 +103,7 @@
       <div class="fields-default">
         <div class="field">
           <label for="input-valor">Monto</label>
-          <div class="row">
-            <input type="number" id="input-valor" step="100" min="0" placeholder="0" inputmode="decimal">
-            <span class="suffix">$</span>
-          </div>
+          <input type="number" id="input-valor" step="100" min="0" placeholder="$0" inputmode="decimal">
         </div>
         <div class="field">
           <label for="input-fecha-mov">Fecha</label>
@@ -143,9 +140,9 @@
     <p class="hint">Las horas se cargan solo por el control diario.</p>
   </section>
 
-  <section class="list-section">
+  <section class="list-section collapsible collapsed" id="movimientos-section">
     <div class="list-header">
-      <h2>Movimientos</h2>
+      <h2 id="mov-toggle"><span class="toggle-icon">▸</span> Movimientos</h2>
       <button id="btn-export" class="ghost small">Exportar</button>
     </div>
     <ul id="lista"></ul>

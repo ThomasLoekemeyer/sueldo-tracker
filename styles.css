@@ -80,8 +80,29 @@ header {
   padding-left: 4px;
   font-weight: 600;
 }
-.field input { width: 100%; }
-.field input[type="date"] { color-scheme: dark; font-variant-numeric: tabular-nums; }
+.field input {
+  width: 100%;
+  box-sizing: border-box;
+  margin: 0;
+}
+.field input[type="date"] {
+  color-scheme: dark;
+  font-variant-numeric: tabular-nums;
+  min-height: 50px; /* match number input height */
+}
+.collapsible.collapsed ul { display: none; }
+.collapsible #mov-toggle {
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.collapsible .toggle-icon {
+  display: inline-block;
+  transition: transform 0.15s ease;
+  color: var(--muted);
+  margin-right: 2px;
+}
+.collapsible:not(.collapsed) .toggle-icon { transform: rotate(90deg); }
 #input-ticker {
   text-transform: uppercase;
   letter-spacing: 0.05em;

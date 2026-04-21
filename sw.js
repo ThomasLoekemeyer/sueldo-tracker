@@ -1,4 +1,4 @@
-const CACHE = "sueldo-1.5";
+const CACHE = "sueldo-1.6";
 const ASSETS = [
   "./",
   "./index.html",

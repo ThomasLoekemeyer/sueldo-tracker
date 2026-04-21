@@ -1,5 +1,5 @@
 // ==== Config ====
-const APP_VERSION = "1.5";
+const APP_VERSION = "1.6";
 const SB_URL = "https://ljwlanwmnuqgxftlirhh.supabase.co";
 const SB_KEY = "sb_publishable_niVre5BYps9QZVh4qq0UtQ_mMmCrIV0";
 
@@ -1067,6 +1067,14 @@ async function agregarMesValorHora() {
 $("btn-open-vh").addEventListener("click", openValorHoraScreen);
 $("btn-vh-back").addEventListener("click", closeValorHoraScreen);
 $("btn-vh-add").addEventListener("click", agregarMesValorHora);
+
+// ==== Movimientos collapsible ====
+const movToggle = $("mov-toggle");
+if (movToggle) {
+  movToggle.addEventListener("click", () => {
+    $("movimientos-section").classList.toggle("collapsed");
+  });
+}
 
 // ==== Service Worker ====
 if ("serviceWorker" in navigator) {
