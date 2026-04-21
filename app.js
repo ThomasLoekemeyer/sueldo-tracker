@@ -1,5 +1,5 @@
 // ==== Config ====
-const APP_VERSION = "1.10";
+const APP_VERSION = "1.11";
 const SB_URL = "https://ljwlanwmnuqgxftlirhh.supabase.co";
 const SB_KEY = "sb_publishable_niVre5BYps9QZVh4qq0UtQ_mMmCrIV0";
 
@@ -444,6 +444,25 @@ $("form-add").addEventListener("submit", async (e) => {
   }
 });
 
+// Dolar MEP del día (o el más cercano hacia atrás si es feriado/finde)
+async function fetchMepForDate(fechaStr) {
+  const base = new Date(fechaStr + "T12:00:00-03:00");
+  for (let offset = 0; offset < 5; offset++) {
+    const d = new Date(base);
+    d.setDate(d.getDate() - offset);
+    const iso = d.toISOString().slice(0, 10);
+    try {
+      const res = await fetch(`https://api.argentinadatos.com/v1/cotizaciones/dolares/bolsa/${iso}`);
+      if (res.ok) {
+        const data = await res.json();
+        const venta = Number(data?.venta);
+        if (venta > 0) return venta;
+      }
+    } catch {}
+  }
+  return null;
+}
+
 async function fetchPrecioHistorico(ticker, fechaStr) {
   const symbol = ticker === "USD" ? "ARS=X" : `${ticker}.BA`;
   const fecha = new Date(fechaStr + "T12:00:00-03:00").getTime() / 1000;
@@ -506,12 +525,16 @@ async function handleCompraSubmit() {
   const tipo_activo = ticker === "USD" ? "usd" : "cedear";
   const fechaIso = `${fechaStr} 12:00:00-03:00`;
 
+  // Busca MEP del día de la compra para dolarizar
+  const mep = await fetchMepForDate(fechaStr);
+
   await sbInsertInversion({
     ticker,
     tipo_activo,
     cantidad,
     precio_ars: precio,
     precio_usd: null,
+    mep,
     fecha: fechaIso,
     notas: "compra desde app",
   });
@@ -944,10 +967,11 @@ async function sbPatchInversion(id, fields) {
 async function backfillPrecios() {
   const pendientes = inversionesCache.filter(r => {
     const p = Number(r.precio_ars);
-    return !p || p <= 0;
+    const m = Number(r.mep);
+    return (!p || p <= 0) || (!m || m <= 0);
   });
-  if (!pendientes.length) { alert("Todas las transacciones ya tienen precio."); return; }
-  if (!confirm(`Buscar precio en Yahoo Finance para ${pendientes.length} transacción(es) sin precio?`)) return;
+  if (!pendientes.length) { alert("Todas las transacciones ya tienen precio y MEP."); return; }
+  if (!confirm(`Completar precio/MEP para ${pendientes.length} transacción(es)?`)) return;
 
   const btn = $("btn-inv-backfill");
   btn.disabled = true;
@@ -958,10 +982,18 @@ async function backfillPrecios() {
     const r = pendientes[i];
     btn.textContent = `${i + 1}/${pendientes.length}...`;
     const fechaStr = new Date(r.fecha).toISOString().slice(0, 10);
+    const patch = {};
     try {
-      const precio = await fetchPrecioHistorico(r.ticker, fechaStr);
-      if (precio && precio > 0) {
-        await sbPatchInversion(r.id, { precio_ars: precio });
+      if (!Number(r.precio_ars)) {
+        const precio = await fetchPrecioHistorico(r.ticker, fechaStr);
+        if (precio && precio > 0) patch.precio_ars = precio;
+      }
+      if (!Number(r.mep)) {
+        const mep = await fetchMepForDate(fechaStr);
+        if (mep && mep > 0) patch.mep = mep;
+      }
+      if (Object.keys(patch).length > 0) {
+        await sbPatchInversion(r.id, patch);
         ok++;
       } else {
         fail++;
@@ -973,7 +1005,7 @@ async function backfillPrecios() {
 
   btn.textContent = origLbl;
   btn.disabled = false;
-  alert(`Completado: ${ok} actualizadas, ${fail} sin datos/error.`);
+  alert(`Completado: ${ok} actualizadas, ${fail} sin datos.`);
   await sbFetchInversiones();
   renderInversiones();
 }
@@ -1006,15 +1038,18 @@ function renderTickerDetail() {
   const totalCant = items.reduce((s, r) => s + Number(r.cantidad), 0);
   const compras = items.filter(r => Number(r.cantidad) > 0);
   const costoArsTotal = compras.reduce((s, r) => s + (r.precio_ars ? Number(r.cantidad) * Number(r.precio_ars) : 0), 0);
-  const costoUsdTotal = compras.reduce((s, r) => s + (r.precio_usd ? Number(r.cantidad) * Number(r.precio_usd) : 0), 0);
+  const usdMepTotal = compras.reduce((s, r) => {
+    if (r.precio_ars && r.mep) return s + (Number(r.cantidad) * Number(r.precio_ars) / Number(r.mep));
+    return s;
+  }, 0);
   const cantConArs = compras.filter(r => r.precio_ars).reduce((s, r) => s + Number(r.cantidad), 0);
   const promArs = cantConArs > 0 ? costoArsTotal / cantConArs : 0;
 
   const stats = [];
   stats.push(`${totalCant} unid`);
   if (promArs) stats.push(`CPC ${fmt(promArs)}`);
-  if (costoArsTotal) stats.push(`invertido ${fmt(costoArsTotal)}`);
-  if (costoUsdTotal) stats.push(`USD ${Math.round(costoUsdTotal).toLocaleString("es-AR")}`);
+  if (costoArsTotal) stats.push(`${fmt(costoArsTotal)}`);
+  if (usdMepTotal) stats.push(`USD ${Math.round(usdMepTotal).toLocaleString("es-AR")} @ MEP`);
   $("td-stats").textContent = stats.join(" · ");
 
   const ul = $("td-list");
@@ -1027,15 +1062,17 @@ function renderTickerDetail() {
     const cant = Number(r.cantidad);
     const fecha = new Date(r.fecha).toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit", year: "numeric" });
     const precioArs = r.precio_ars ? fmt(Number(r.precio_ars)) : "sin precio ARS";
-    const precioUsd = r.precio_usd ? ` / USD ${Number(r.precio_usd)}` : "";
     const total = r.precio_ars ? fmt(Math.abs(cant) * Number(r.precio_ars)) : "";
+    const usdMep = r.precio_ars && r.mep
+      ? `USD ${(Math.abs(cant) * Number(r.precio_ars) / Number(r.mep)).toFixed(2)} @ MEP ${Math.round(Number(r.mep))}`
+      : "";
     const signo = cant >= 0 ? "+" : "";
     const signClass = cant < 0 ? "neg" : "pos";
     const li = document.createElement("li");
     li.innerHTML = `
       <div class="mov-info">
-        <div class="mov-desc"><span class="${signClass}"><strong>${signo}${cant}</strong></span> @ ${precioArs}${precioUsd}</div>
-        <div class="mov-meta">${fecha}${total ? ' · total ' + total : ''}${r.notas ? ' · ' + escapeHtml(r.notas) : ''}</div>
+        <div class="mov-desc"><span class="${signClass}"><strong>${signo}${cant}</strong></span> @ ${precioArs}</div>
+        <div class="mov-meta">${fecha}${total ? ' · ' + total : ''}${usdMep ? ' · ' + usdMep : ''}${r.notas ? ' · ' + escapeHtml(r.notas) : ''}</div>
       </div>
       <button class="mov-delete" data-id="${r.id}" data-action="edit" aria-label="Editar">✎</button>
       <button class="mov-delete" data-id="${r.id}" data-action="delete" aria-label="Borrar">✕</button>
@@ -1067,9 +1104,16 @@ async function editarLote(id) {
   if (pUsdStr === null) return;
   const precio_usd = pUsdStr.trim() ? Number(pUsdStr) : null;
 
+  const mepStr = prompt("Dolar MEP del día (vacío = buscar):", r.mep == null ? "" : String(r.mep));
+  if (mepStr === null) return;
+  let mep = mepStr.trim() ? Number(mepStr) : null;
+
   const fechaActual = new Date(r.fecha).toISOString().slice(0, 10);
   const fechaStr = prompt("Fecha (YYYY-MM-DD):", fechaActual);
   if (fechaStr === null) return;
+
+  // Si se dejó MEP vacío, buscarlo
+  if (!mep) mep = await fetchMepForDate(fechaStr);
 
   const notas = prompt("Notas:", r.notas || "");
   if (notas === null) return;
@@ -1079,6 +1123,7 @@ async function editarLote(id) {
       cantidad,
       precio_ars,
       precio_usd,
+      mep,
       fecha: `${fechaStr} 12:00:00-03:00`,
       notas: notas.trim() || null,
     });
