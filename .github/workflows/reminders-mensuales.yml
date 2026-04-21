@@ -1,0 +1,45 @@
+name: Recordatorios mensuales (sueldo + comisiones)
+
+on:
+  schedule:
+    # Día 1 y 15 de cada mes a las 10:00 AR = 13:00 UTC
+    - cron: "0 13 1,15 * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Enviar recordatorio según día del mes (AR)
+        env:
+          TOPIC: ${{ secrets.NTFY_TOPIC }}
+          APP_URL: https://thomasloekemeyer.github.io/sueldo-tracker/
+        run: |
+          DIA=$(TZ=America/Argentina/Buenos_Aires date +%d)
+          MES_LBL=$(TZ=America/Argentina/Buenos_Aires date +%m/%Y)
+
+          if [ "$DIA" = "01" ]; then
+            TITLE="Sueldo ${MES_LBL}"
+            BODY="Registrar sueldo (\$2.750.000 = \$1.750.000 + \$1.000.000)"
+            CONFIRM_URL="${APP_URL}?action=sueldo"
+            CONFIRM_LBL="Confirmar 2.750.000"
+          elif [ "$DIA" = "15" ]; then
+            TITLE="Comisiones ${MES_LBL}"
+            BODY="Registrar comisiones del mes"
+            CONFIRM_URL="${APP_URL}?action=comision"
+            CONFIRM_LBL="Cargar comisión"
+          else
+            echo "Día $DIA no aplica (solo 1 y 15), skip."
+            exit 0
+          fi
+
+          curl -fsS -X POST "https://ntfy.sh/${TOPIC}" \
+            -H "Title: ${TITLE}" \
+            -H "Priority: high" \
+            -H "Tags: moneybag" \
+            -H "Click: ${APP_URL}" \
+            -H "Actions: view, ${CONFIRM_LBL}, ${CONFIRM_URL}, clear=true; view, Abrir app, ${APP_URL}, clear=true" \
+            -d "${BODY}"

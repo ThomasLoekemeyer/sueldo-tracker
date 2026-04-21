@@ -81,8 +81,7 @@
       <div class="label">Saldo actual</div>
       <div id="saldo" class="saldo">$0</div>
     </div>
-    <button id="btn-open-inv" class="icon-btn" aria-label="Inversiones">📈</button>
-    <button id="btn-lock" class="icon-btn" aria-label="Bloquear">🔒</button>
+    <button id="btn-open-inv" class="header-btn">📈 Inversiones</button>
   </header>
 
   <div id="banner-confirm" class="banner hidden">
@@ -97,13 +96,23 @@
     <div class="tabs">
       <button class="tab active" data-tipo="ingreso">Ingreso</button>
       <button class="tab" data-tipo="egreso">Egreso</button>
+      <button class="tab" data-tipo="compra">Compra inv.</button>
     </div>
     <form id="form-add">
-      <div class="row">
-        <input type="number" id="input-valor" step="100" min="0" placeholder="Monto" required inputmode="decimal">
-        <span class="suffix">$</span>
+      <div class="fields-default">
+        <div class="row">
+          <input type="number" id="input-valor" step="100" min="0" placeholder="Monto" inputmode="decimal">
+          <span class="suffix">$</span>
+        </div>
+        <input type="text" id="input-desc" placeholder="Descripción (opcional)">
       </div>
-      <input type="text" id="input-desc" placeholder="Descripción (opcional)">
+      <div class="fields-compra hidden">
+        <input type="text" id="input-ticker" placeholder="Ticker (SPY, BRKB, USD...)" autocomplete="off">
+        <input type="number" id="input-cantidad" step="0.01" placeholder="Cantidad" inputmode="decimal">
+        <input type="number" id="input-precio" step="0.01" placeholder="Precio ARS por unidad" inputmode="decimal">
+        <input type="date" id="input-fecha">
+        <div id="preview-total" class="preview"></div>
+      </div>
       <button type="submit" class="primary">Agregar</button>
     </form>
     <p class="hint">Las horas se cargan solo por el control diario.</p>

@@ -1,5 +1,5 @@
 // ==== Config ====
-const APP_VERSION = "1.1";
+const APP_VERSION = "1.2";
 const SB_URL = "https://ljwlanwmnuqgxftlirhh.supabase.co";
 const SB_KEY = "sb_publishable_niVre5BYps9QZVh4qq0UtQ_mMmCrIV0";
 
@@ -249,6 +249,47 @@ async function quickConfirmar() {
   }
 }
 
+async function quickSueldo() {
+  await showQuick("⏳", "Registrando sueldo...", "");
+  try {
+    const monto = 2750000;
+    const mes = new Date().toLocaleDateString("es-AR", { month: "long", year: "numeric" });
+    await sbInsert({
+      fecha: new Date().toISOString(),
+      tipo: "ingreso",
+      horas: null,
+      monto,
+      desc: `Sueldo ${mes} (incluye +$1M)`,
+    });
+    await showQuick("✓", "Sueldo registrado", `${fmt(monto)} sumado al saldo.`);
+    setTimeout(() => window.close(), 1500);
+  } catch (e) {
+    await showQuick("⚠️", "Error", e.message);
+  }
+}
+
+async function quickComision() {
+  const txt = prompt("Monto total de comisiones este mes:", "");
+  if (!txt) { await showQuick("✓", "Cancelado", ""); setTimeout(() => window.close(), 1500); return; }
+  const n = Number(txt);
+  if (!n || n <= 0) { await showQuick("⚠️", "Inválido", "Monto inválido"); return; }
+  await showQuick("⏳", "Registrando comisión...", "");
+  try {
+    const mes = new Date().toLocaleDateString("es-AR", { month: "long", year: "numeric" });
+    await sbInsert({
+      fecha: new Date().toISOString(),
+      tipo: "ingreso",
+      horas: null,
+      monto: n,
+      desc: `Comisiones ${mes}`,
+    });
+    await showQuick("✓", "Comisión registrada", `${fmt(n)} sumado al saldo.`);
+    setTimeout(() => window.close(), 1500);
+  } catch (e) {
+    await showQuick("⚠️", "Error", e.message);
+  }
+}
+
 async function quickEditar() {
   const txt = prompt("¿Cuántas horas trabajaste hoy?", "9");
   if (!txt) { await showQuick("✓", "Cancelado", "No se registró nada."); return; }
@@ -315,7 +356,8 @@ btnSetup.addEventListener("click", async () => {
   catch (e) { lockError.textContent = "No se pudo configurar: " + (e.message || e); }
 });
 
-$("btn-lock").addEventListener("click", () => showLock());
+const btnLockEl = $("btn-lock");
+if (btnLockEl) btnLockEl.addEventListener("click", () => showLock());
 
 // ==== Sync ====
 async function syncFromSupabase() {
@@ -329,45 +371,116 @@ async function syncFromSupabase() {
   }
 }
 
-// ==== Add form ====
+// ==== Add form (ingreso / egreso / compra inversión) ====
 let tipoActivo = "ingreso";
 const tabs = document.querySelectorAll(".tab");
 const inputValor = $("input-valor");
 const inputDesc = $("input-desc");
+const inputTicker = $("input-ticker");
+const inputCantidad = $("input-cantidad");
+const inputPrecio = $("input-precio");
+const inputFecha = $("input-fecha");
+const fieldsDefault = document.querySelector(".fields-default");
+const fieldsCompra = document.querySelector(".fields-compra");
 
 function setTipo(t) {
   tipoActivo = t;
   tabs.forEach(tab => tab.classList.toggle("active", tab.dataset.tipo === t));
+  const isCompra = t === "compra";
+  if (fieldsDefault) fieldsDefault.classList.toggle("hidden", isCompra);
+  if (fieldsCompra) fieldsCompra.classList.toggle("hidden", !isCompra);
+  if (isCompra && inputFecha && !inputFecha.value) inputFecha.value = hoyISO();
 }
 tabs.forEach(tab => tab.addEventListener("click", () => setTipo(tab.dataset.tipo)));
 
+function updateCompraPreview() {
+  const cant = Number(inputCantidad.value);
+  const precio = Number(inputPrecio.value);
+  const preview = $("preview-total");
+  if (cant && precio) {
+    preview.textContent = `Total: ${fmt(cant * precio)} (se descuenta del saldo)`;
+  } else {
+    preview.textContent = "";
+  }
+}
+if (inputCantidad) inputCantidad.addEventListener("input", updateCompraPreview);
+if (inputPrecio) inputPrecio.addEventListener("input", updateCompraPreview);
+
 $("form-add").addEventListener("submit", async (e) => {
   e.preventDefault();
-  const monto = Number(inputValor.value);
-  if (!monto || monto <= 0) return;
-  const desc = inputDesc.value.trim() || tipoActivo;
   const btn = e.target.querySelector("button[type=submit]");
   btn.disabled = true;
   try {
-    const created = await sbInsert({
-      fecha: new Date().toISOString(),
-      tipo: tipoActivo,
-      horas: null,
-      monto,
-      desc,
-    });
-    const cache = getCache();
-    cache.unshift(created);
-    setCache(cache);
-    render();
-    inputValor.value = "";
-    inputDesc.value = "";
+    if (tipoActivo === "compra") {
+      await handleCompraSubmit();
+    } else {
+      const monto = Number(inputValor.value);
+      if (!monto || monto <= 0) return;
+      const desc = inputDesc.value.trim() || tipoActivo;
+      const created = await sbInsert({
+        fecha: new Date().toISOString(),
+        tipo: tipoActivo,
+        horas: null,
+        monto,
+        desc,
+      });
+      const cache = getCache();
+      cache.unshift(created);
+      setCache(cache);
+      render();
+      inputValor.value = "";
+      inputDesc.value = "";
+    }
   } catch (err) {
     alert("No se pudo guardar: " + err.message);
   } finally {
     btn.disabled = false;
   }
 });
+
+async function handleCompraSubmit() {
+  const ticker = inputTicker.value.trim().toUpperCase();
+  const cantidad = Number(inputCantidad.value);
+  const precio = Number(inputPrecio.value);
+  const fechaStr = inputFecha.value || hoyISO();
+  if (!ticker) { alert("Falta el ticker"); return; }
+  if (!cantidad || cantidad <= 0) { alert("Cantidad inválida"); return; }
+  if (!precio || precio <= 0) { alert("Precio inválido"); return; }
+
+  const total = cantidad * precio;
+  if (!confirm(`Comprar ${cantidad} ${ticker} a ${fmt(precio)}/u = ${fmt(total)} (se descuenta del saldo). ¿Confirmar?`)) return;
+
+  const tipo_activo = ticker === "USD" ? "usd" : "cedear";
+  const fechaIso = `${fechaStr} 12:00:00-03:00`;
+
+  await sbInsertInversion({
+    ticker,
+    tipo_activo,
+    cantidad,
+    precio_ars: precio,
+    precio_usd: null,
+    fecha: fechaIso,
+    notas: "compra desde app",
+  });
+
+  const egreso = await sbInsert({
+    fecha: new Date().toISOString(),
+    tipo: "egreso",
+    horas: null,
+    monto: total,
+    desc: `Compra ${cantidad} ${ticker}`,
+  });
+  const cache = getCache();
+  cache.unshift(egreso);
+  setCache(cache);
+  render();
+
+  inputTicker.value = "";
+  inputCantidad.value = "";
+  inputPrecio.value = "";
+  inputFecha.value = hoyISO();
+  $("preview-total").textContent = "";
+}
 
 async function agregarHoras(horas, desc) {
   try {
@@ -880,6 +993,14 @@ if ("serviceWorker" in navigator) {
   }
   if (action === "editar") {
     await quickEditar();
+    return;
+  }
+  if (action === "sueldo") {
+    await quickSueldo();
+    return;
+  }
+  if (action === "comision") {
+    await quickComision();
     return;
   }
   showLock();

@@ -57,6 +57,19 @@ header {
   font-size: 18px;
   cursor: pointer;
 }
+.header-btn {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 10px 14px;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.header-btn:active { background: var(--surface-2); }
+.fields-compra { display: flex; flex-direction: column; gap: 10px; }
 
 .banner {
   background: var(--warning);
