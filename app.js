@@ -547,6 +547,212 @@ $("btn-export").addEventListener("click", () => {
   URL.revokeObjectURL(url);
 });
 
+// ==== Inversiones ====
+const invScreen = $("inversiones-screen");
+let inversionesCache = [];
+let preciosActualesCache = {}; // {ticker: {precio_ars, precio_usd}}
+
+async function sbFetchInversiones() {
+  try {
+    const res = await fetch(`${SB_URL}/rest/v1/inversiones?select=*&order=fecha.desc`, { headers: sbHeaders });
+    if (!res.ok) throw new Error(res.status);
+    inversionesCache = await res.json();
+    return inversionesCache;
+  } catch (e) {
+    console.warn("fetch inversiones:", e);
+    return [];
+  }
+}
+
+async function sbFetchPreciosActuales() {
+  try {
+    const res = await fetch(`${SB_URL}/rest/v1/precios_actuales?select=*`, { headers: sbHeaders });
+    if (!res.ok) throw new Error(res.status);
+    const rows = await res.json();
+    preciosActualesCache = {};
+    for (const r of rows) preciosActualesCache[r.ticker] = r;
+    return preciosActualesCache;
+  } catch (e) {
+    console.warn("fetch precios:", e);
+    return {};
+  }
+}
+
+async function sbInsertInversion(inv) {
+  const res = await fetch(`${SB_URL}/rest/v1/inversiones`, {
+    method: "POST",
+    headers: { ...sbHeaders, Prefer: "return=representation" },
+    body: JSON.stringify(inv),
+  });
+  if (!res.ok) throw new Error(`insert ${res.status}: ${await res.text()}`);
+  const [row] = await res.json();
+  return row;
+}
+
+async function sbDeleteInversion(id) {
+  const res = await fetch(`${SB_URL}/rest/v1/inversiones?id=eq.${id}`, {
+    method: "DELETE",
+    headers: sbHeaders,
+  });
+  if (!res.ok) throw new Error(`delete ${res.status}`);
+}
+
+function aggregatePositions(rows) {
+  const map = new Map();
+  for (const r of rows) {
+    const ticker = r.ticker;
+    const cant = Number(r.cantidad);
+    const pArs = r.precio_ars != null ? Number(r.precio_ars) : null;
+    const pUsd = r.precio_usd != null ? Number(r.precio_usd) : null;
+    if (!map.has(ticker)) {
+      map.set(ticker, { ticker, tipo_activo: r.tipo_activo, cantidad: 0, costoArs: 0, costoUsd: 0, cantConPrecio: 0 });
+    }
+    const p = map.get(ticker);
+    p.cantidad += cant;
+    // Costo solo para compras (cantidad > 0) con precio
+    if (cant > 0 && pArs !== null) p.costoArs += cant * pArs;
+    if (cant > 0 && pUsd !== null) p.costoUsd += cant * pUsd;
+    if (cant > 0 && (pArs !== null || pUsd !== null)) p.cantConPrecio += cant;
+  }
+  return [...map.values()].map(p => ({
+    ...p,
+    promArs: p.cantConPrecio > 0 ? p.costoArs / p.cantConPrecio : null,
+    promUsd: p.cantConPrecio > 0 ? p.costoUsd / p.cantConPrecio : null,
+  }));
+}
+
+async function openInversiones() {
+  appScreen.classList.add("hidden");
+  invScreen.classList.remove("hidden");
+  invScreen.scrollTop = 0;
+  await Promise.all([sbFetchInversiones(), sbFetchPreciosActuales()]);
+  renderInversiones();
+}
+
+function closeInversiones() {
+  invScreen.classList.add("hidden");
+  appScreen.classList.remove("hidden");
+}
+
+function renderInversiones() {
+  const positions = aggregatePositions(inversionesCache).filter(p => Math.abs(p.cantidad) > 0.0001);
+  let totalUsd = 0;
+
+  // Render positions
+  const ul = $("inv-positions");
+  ul.innerHTML = "";
+  if (!positions.length) {
+    ul.innerHTML = '<li style="justify-content:center;color:var(--muted)">Sin posiciones</li>';
+  } else {
+    // Orden: CEDEARs primero, USD al final
+    positions.sort((a, b) => (a.tipo_activo === "usd") - (b.tipo_activo === "usd") || a.ticker.localeCompare(b.ticker));
+    for (const p of positions) {
+      const curr = preciosActualesCache[p.ticker];
+      const currUsd = curr?.precio_usd ? Number(curr.precio_usd) : null;
+      const currArs = curr?.precio_ars ? Number(curr.precio_ars) : null;
+
+      // Valor actual estimado en USD
+      let valorUsd = null;
+      if (p.tipo_activo === "usd") {
+        valorUsd = p.cantidad; // 1 USD = 1 USD
+      } else if (currUsd !== null) {
+        valorUsd = p.cantidad * currUsd;
+      } else if (p.promUsd !== null) {
+        valorUsd = p.cantidad * p.promUsd; // fallback: costo
+      }
+      if (valorUsd !== null) totalUsd += valorUsd;
+
+      // P/L %
+      let pl = null;
+      if (p.tipo_activo === "cedear" && currUsd !== null && p.promUsd !== null && p.promUsd > 0) {
+        pl = ((currUsd - p.promUsd) / p.promUsd) * 100;
+      }
+
+      const li = document.createElement("li");
+      const tickerLabel = p.tipo_activo === "usd" ? "USD cash" : p.ticker;
+      const cantLabel = p.tipo_activo === "usd" ? `${Math.round(p.cantidad).toLocaleString("es-AR")} USD` : `${p.cantidad} unid`;
+      const costUsdLabel = p.promUsd !== null ? `cpc USD ${p.promUsd.toFixed(2)}` : "";
+      const costArsLabel = p.promArs !== null ? `cpc ARS ${Math.round(p.promArs).toLocaleString("es-AR")}` : "";
+      const currLabel = currUsd !== null
+        ? `USD ${currUsd.toFixed(2)}${pl !== null ? ` (${pl >= 0 ? "+" : ""}${pl.toFixed(1)}%)` : ""}`
+        : "—";
+      li.innerHTML = `
+        <div class="mov-info">
+          <div class="mov-desc"><strong>${tickerLabel}</strong> · ${cantLabel}</div>
+          <div class="mov-meta">${costArsLabel}${costArsLabel && costUsdLabel ? " · " : ""}${costUsdLabel}</div>
+        </div>
+        <div class="mov-monto ${pl !== null && pl < 0 ? "neg" : "pos"}">${currLabel}</div>
+      `;
+      ul.appendChild(li);
+    }
+  }
+
+  $("inv-total").textContent = `USD ${Math.round(totalUsd).toLocaleString("es-AR")}`;
+
+  // Render transactions
+  const txUl = $("inv-transactions");
+  txUl.innerHTML = "";
+  const recientes = inversionesCache.slice(0, 30);
+  if (!recientes.length) {
+    txUl.innerHTML = '<li style="justify-content:center;color:var(--muted)">Sin transacciones</li>';
+  } else {
+    for (const r of recientes) {
+      const cant = Number(r.cantidad);
+      const signo = cant >= 0 ? "+" : "";
+      const fecha = new Date(r.fecha).toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit", year: "2-digit" });
+      const precio = r.precio_ars ? `$${Math.round(Number(r.precio_ars)).toLocaleString("es-AR")}` : (r.precio_usd ? `USD ${r.precio_usd}` : "—");
+      const li = document.createElement("li");
+      li.innerHTML = `
+        <div class="mov-info">
+          <div class="mov-desc">${r.ticker} ${signo}${cant}</div>
+          <div class="mov-meta">${fecha} · ${precio} ${r.notas ? "· " + escapeHtml(r.notas) : ""}</div>
+        </div>
+        <button class="mov-delete" data-id="${r.id}" aria-label="Borrar">✕</button>
+      `;
+      txUl.appendChild(li);
+    }
+    txUl.querySelectorAll(".mov-delete").forEach(b => {
+      b.addEventListener("click", async () => {
+        if (!confirm("¿Borrar esta transacción?")) return;
+        try {
+          await sbDeleteInversion(Number(b.dataset.id));
+          inversionesCache = inversionesCache.filter(x => x.id !== Number(b.dataset.id));
+          renderInversiones();
+        } catch (e) { alert("Error: " + e.message); }
+      });
+    });
+  }
+}
+
+async function agregarInversion() {
+  const ticker = prompt("Ticker (ej SPY, BRKB, USD):");
+  if (!ticker) return;
+  const tickerUp = ticker.trim().toUpperCase();
+  const tipo = tickerUp === "USD" ? "usd" : "cedear";
+  const cantStr = prompt("Cantidad (positivo = compra, negativo = venta):");
+  if (!cantStr) return;
+  const cantidad = Number(cantStr);
+  if (!cantidad) { alert("Cantidad inválida"); return; }
+  const pArsStr = prompt(tipo === "usd" ? "Tipo de cambio (ARS por USD):" : "Precio por unidad en ARS:");
+  const precio_ars = pArsStr ? Number(pArsStr) : null;
+  const pUsdStr = prompt(tipo === "usd" ? "Dejar en 1" : "Precio por unidad en USD (opcional):", tipo === "usd" ? "1" : "");
+  const precio_usd = pUsdStr ? Number(pUsdStr) : null;
+  const fechaStr = prompt("Fecha (YYYY-MM-DD), vacío = hoy:", hoyISO());
+  const fecha = fechaStr ? `${fechaStr} 12:00:00-03:00` : new Date().toISOString();
+  const notas = prompt("Notas (opcional):", "") || null;
+  try {
+    await sbInsertInversion({ ticker: tickerUp, tipo_activo: tipo, cantidad, precio_ars, precio_usd, fecha, notas });
+    await sbFetchInversiones();
+    renderInversiones();
+  } catch (e) {
+    alert("Error: " + e.message);
+  }
+}
+
+$("btn-open-inv").addEventListener("click", openInversiones);
+$("btn-inv-back").addEventListener("click", closeInversiones);
+$("btn-inv-add").addEventListener("click", agregarInversion);
+
 // ==== Valor hora screen ====
 const vhScreen = $("valor-hora-screen");
 
