@@ -10,7 +10,25 @@ const KEY_CHECK = "sueldo.checkTime";
 
 const getCache = () => JSON.parse(localStorage.getItem(KEY_CACHE) || "[]");
 const setCache = (m) => localStorage.setItem(KEY_CACHE, JSON.stringify(m));
-const getValorHora = () => Number(localStorage.getItem(KEY_VALOR) || 19000);
+// Cache de valor_hora desde Supabase. Fallback a localStorage si no hay red.
+let valoresHoraCache = JSON.parse(localStorage.getItem("sueldo.valoresCache") || "[]"); // [{mes, valor}]
+
+function mesKey(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
+}
+
+function getValorHoraForDate(date) {
+  const key = mesKey(date);
+  const exact = valoresHoraCache.find(v => v.mes === key);
+  if (exact) return Number(exact.valor);
+  // Fallback: valor más reciente anterior o igual
+  const sorted = [...valoresHoraCache].sort((a, b) => b.mes.localeCompare(a.mes));
+  const prev = sorted.find(v => v.mes <= key);
+  if (prev) return Number(prev.valor);
+  return Number(localStorage.getItem(KEY_VALOR) || 19000);
+}
+
+const getValorHora = () => getValorHoraForDate(new Date());
 const setValorHora = (v) => localStorage.setItem(KEY_VALOR, String(v));
 const getCheckTime = () => localStorage.getItem(KEY_CHECK) || "18:00";
 const setCheckTime = (t) => localStorage.setItem(KEY_CHECK, t);
@@ -66,6 +84,30 @@ async function sbInsert(mov) {
   if (!res.ok) throw new Error(`insert ${res.status}: ${await res.text()}`);
   const [created] = await res.json();
   return sbRowToMov(created);
+}
+
+async function sbFetchValoresHora() {
+  try {
+    const res = await fetch(`${SB_URL}/rest/v1/valor_hora?select=*&order=mes.desc`, { headers: sbHeaders });
+    if (!res.ok) throw new Error(res.status);
+    const rows = await res.json();
+    valoresHoraCache = rows.map(r => ({ mes: r.mes, valor: Number(r.valor) }));
+    localStorage.setItem("sueldo.valoresCache", JSON.stringify(valoresHoraCache));
+    return valoresHoraCache;
+  } catch (e) {
+    console.warn("fetch valor_hora:", e);
+    return valoresHoraCache;
+  }
+}
+
+async function sbRecalcHorasMes(mes, valor) {
+  const res = await fetch(`${SB_URL}/rest/v1/rpc/recalc_horas_mes`, {
+    method: "POST",
+    headers: { ...sbHeaders },
+    body: JSON.stringify({ p_mes: mes, p_valor: valor }),
+  });
+  if (!res.ok) throw new Error(`rpc ${res.status}: ${await res.text()}`);
+  return res.json();
 }
 
 async function sbDelete(id) {
@@ -241,7 +283,9 @@ async function showApp() {
   lockScreen.classList.add("hidden");
   appScreen.classList.remove("hidden");
   quickScreen.classList.add("hidden");
-  await syncFromSupabase();
+  $("valor-hora-screen").classList.add("hidden");
+  await Promise.all([syncFromSupabase(), sbFetchValoresHora()]);
+  render();
   checkConfirmBanner();
   startBannerPolling();
 }
@@ -477,11 +521,6 @@ $("btn-confirm-editar").addEventListener("click", promptHorasCustom);
 
 // ==== Config ====
 $("btn-config").addEventListener("click", () => {
-  const nuevoValor = prompt("Valor hora (en pesos):", String(getValorHora()));
-  if (nuevoValor !== null) {
-    const n = Number(nuevoValor);
-    if (n && n > 0) setValorHora(n);
-  }
   const nuevaHora = prompt("Horario del control diario (HH:MM):", getCheckTime());
   if (nuevaHora !== null && /^\d{1,2}:\d{2}$/.test(nuevaHora.trim())) {
     const [h, m] = nuevaHora.trim().split(":").map(Number);
@@ -507,6 +546,96 @@ $("btn-export").addEventListener("click", () => {
   a.click();
   URL.revokeObjectURL(url);
 });
+
+// ==== Valor hora screen ====
+const vhScreen = $("valor-hora-screen");
+
+function mesLabel(mesISO) {
+  const d = new Date(mesISO + "T12:00:00");
+  return d.toLocaleDateString("es-AR", { month: "long", year: "numeric" });
+}
+
+async function openValorHoraScreen() {
+  await sbFetchValoresHora();
+  appScreen.classList.add("hidden");
+  vhScreen.classList.remove("hidden");
+  renderValorHora();
+}
+
+function closeValorHoraScreen() {
+  vhScreen.classList.add("hidden");
+  appScreen.classList.remove("hidden");
+  render(); // actualizar footer/saldo por si cambió
+}
+
+function renderValorHora() {
+  $("vh-current").textContent = fmt(getValorHora());
+  const ul = $("vh-list");
+  ul.innerHTML = "";
+  if (!valoresHoraCache.length) {
+    ul.innerHTML = '<li style="justify-content:center;color:var(--muted)">Sin entradas todavía</li>';
+    return;
+  }
+  const sorted = [...valoresHoraCache].sort((a, b) => b.mes.localeCompare(a.mes));
+  for (const v of sorted) {
+    const li = document.createElement("li");
+    li.innerHTML = `
+      <div class="mov-info">
+        <div class="mov-desc">${mesLabel(v.mes)}</div>
+        <div class="mov-meta">${v.mes}</div>
+      </div>
+      <div class="mov-monto pos">${fmt(v.valor)}</div>
+      <button class="mov-delete" data-mes="${v.mes}" aria-label="Editar">✎</button>
+    `;
+    ul.appendChild(li);
+  }
+  ul.querySelectorAll(".mov-delete").forEach(b => {
+    b.addEventListener("click", () => editarValorMes(b.dataset.mes));
+  });
+}
+
+async function editarValorMes(mes) {
+  const existing = valoresHoraCache.find(v => v.mes === mes);
+  const currentValor = existing ? existing.valor : 0;
+  const nuevo = prompt(`Valor hora para ${mesLabel(mes)}:`, String(currentValor));
+  if (nuevo === null) return;
+  const n = Number(nuevo);
+  if (!n || n <= 0) { alert("Valor inválido"); return; }
+  if (!confirm(`Esto va a recalcular TODAS las jornadas de ${mesLabel(mes)}. ¿Confirmar?`)) return;
+  try {
+    const count = await sbRecalcHorasMes(mes, n);
+    alert(`Actualizado. ${count} jornadas recalculadas.`);
+    await sbFetchValoresHora();
+    await syncFromSupabase();
+    renderValorHora();
+  } catch (e) {
+    alert("Error: " + e.message);
+  }
+}
+
+async function agregarMesValorHora() {
+  const mesStr = prompt("Mes (YYYY-MM):", mesKey(new Date()).slice(0, 7));
+  if (!mesStr) return;
+  if (!/^\d{4}-\d{2}$/.test(mesStr)) { alert("Formato inválido, usá YYYY-MM"); return; }
+  const mes = `${mesStr}-01`;
+  const valor = prompt("Valor hora:", String(getValorHora()));
+  if (!valor) return;
+  const n = Number(valor);
+  if (!n || n <= 0) { alert("Valor inválido"); return; }
+  try {
+    const count = await sbRecalcHorasMes(mes, n);
+    alert(`Guardado. ${count} jornadas recalculadas (puede ser 0 si el mes no tiene jornadas aún).`);
+    await sbFetchValoresHora();
+    await syncFromSupabase();
+    renderValorHora();
+  } catch (e) {
+    alert("Error: " + e.message);
+  }
+}
+
+$("btn-open-vh").addEventListener("click", openValorHoraScreen);
+$("btn-vh-back").addEventListener("click", closeValorHoraScreen);
+$("btn-vh-add").addEventListener("click", agregarMesValorHora);
 
 // ==== Service Worker ====
 if ("serviceWorker" in navigator) {

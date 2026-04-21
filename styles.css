@@ -175,4 +175,5 @@ li {
   color: var(--muted);
   gap: 12px;
 }
-.footer-col { display: flex; flex-direction: column; gap: 2px; }
+.footer-col { display: flex; flex-direction: column; gap: 2px; align-items: flex-start; }
+.vh-link { padding: 0 !important; color: var(--text) !important; border: none !important; background: transparent !important; text-align: left; }

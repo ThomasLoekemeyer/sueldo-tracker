@@ -14,6 +14,24 @@
 </head>
 <body>
 
+<div id="valor-hora-screen" class="screen hidden">
+  <header>
+    <button id="btn-vh-back" class="icon-btn" aria-label="Volver">←</button>
+    <div style="flex:1">
+      <div class="label">Valor hora actual</div>
+      <div id="vh-current" class="saldo">$0</div>
+    </div>
+  </header>
+  <section class="list-section">
+    <div class="list-header">
+      <h2>Historial por mes</h2>
+      <button id="btn-vh-add" class="ghost small">+ Mes</button>
+    </div>
+    <ul id="vh-list"></ul>
+    <p class="hint">Editar un mes recalcula el monto de todas las jornadas de ese mes (horas × nuevo valor).</p>
+  </section>
+</div>
+
 <div id="quick-action" class="screen hidden">
   <div class="lock-content">
     <div class="lock-icon" id="qa-icon">⏳</div>
@@ -77,10 +95,10 @@
 
   <div class="footer-info">
     <div class="footer-col">
-      <span>Valor hora: <strong id="valor-hora-label">$19.000</strong></span>
+      <button id="btn-open-vh" class="ghost small vh-link">Valor hora: <strong id="valor-hora-label">$19.000</strong> ›</button>
       <span>Control diario: <strong id="check-time-label">18:00</strong></span>
     </div>
-    <button id="btn-config" class="ghost small">Editar</button>
+    <button id="btn-config" class="ghost small">⚙</button>
   </div>
 </div>
 
