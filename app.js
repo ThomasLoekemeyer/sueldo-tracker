@@ -12,13 +12,18 @@ const getCache = () => JSON.parse(localStorage.getItem(KEY_CACHE) || "[]");
 const setCache = (m) => localStorage.setItem(KEY_CACHE, JSON.stringify(m));
 const getValorHora = () => Number(localStorage.getItem(KEY_VALOR) || 19000);
 const setValorHora = (v) => localStorage.setItem(KEY_VALOR, String(v));
-const getCheckTime = () => localStorage.getItem(KEY_CHECK) || "20:30";
+const getCheckTime = () => localStorage.getItem(KEY_CHECK) || "18:00";
 const setCheckTime = (t) => localStorage.setItem(KEY_CHECK, t);
 
 // ==== Format ====
 const fmt = (n) => "$" + Math.round(n).toLocaleString("es-AR");
-const hoyISO = () => new Date().toISOString().slice(0, 10);
+const hoyISO = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+};
 const hoyLabel = () => new Date().toLocaleDateString("es-AR", { day: "2-digit", month: "short" });
+const fmtDiaMes = (d) => d.toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit" });
+const isWeekday = (d) => { const x = d.getDay(); return x >= 1 && x <= 5; };
 
 // ==== Supabase REST ====
 const sbHeaders = {
@@ -71,17 +76,38 @@ async function sbDelete(id) {
   if (!res.ok) throw new Error(`delete ${res.status}`);
 }
 
-async function sbHasHorasToday() {
-  const hoy = hoyISO();
-  const desde = `${hoy}T00:00:00`;
-  const hasta = `${hoy}T23:59:59`;
+async function sbLastHorasFecha() {
   const res = await fetch(
-    `${SB_URL}/rest/v1/movimientos?select=id&tipo=eq.horas&fecha=gte.${desde}&fecha=lte.${hasta}&limit=1`,
+    `${SB_URL}/rest/v1/movimientos?select=fecha&tipo=eq.horas&order=fecha.desc&limit=1`,
     { headers: sbHeaders }
   );
-  if (!res.ok) return false;
+  if (!res.ok) return null;
   const rows = await res.json();
-  return rows.length > 0;
+  return rows[0]?.fecha || null;
+}
+
+// Días hábiles pendientes de registrar (desde día siguiente al último horas hasta hoy inclusive)
+async function pendingWeekdays() {
+  const last = await sbLastHorasFecha();
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  let start;
+  if (last) {
+    start = new Date(last);
+    start.setDate(start.getDate() + 1);
+    start.setHours(0, 0, 0, 0);
+  } else {
+    start = new Date(today);
+  }
+
+  const pending = [];
+  const cur = new Date(start);
+  while (cur <= today) {
+    if (isWeekday(cur)) pending.push(new Date(cur));
+    cur.setDate(cur.getDate() + 1);
+  }
+  return pending;
 }
 
 // ==== WebAuthn ====
@@ -143,23 +169,37 @@ async function showQuick(icon, title, msg, allowClose = true) {
   $("qa-close").classList.toggle("hidden", !allowClose);
 }
 
-async function quickConfirm9a18() {
-  await showQuick("⏳", "Registrando jornada...", "");
-  try {
-    if (await sbHasHorasToday()) {
-      await showQuick("✓", "Ya estaba registrada", "Tu jornada de hoy ya estaba cargada.");
-      setTimeout(() => window.close(), 1500);
-      return;
-    }
-    const valor = getValorHora();
-    await sbInsert({
-      fecha: new Date().toISOString(),
+async function confirmarPendientesBatch() {
+  const pending = await pendingWeekdays();
+  if (pending.length === 0) return { count: 0 };
+  const valor = getValorHora();
+  const created = [];
+  for (const d of pending) {
+    const iso = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 18, 0, 0).toISOString();
+    const label = d.toLocaleDateString("es-AR", { day: "2-digit", month: "short" });
+    const row = await sbInsert({
+      fecha: iso,
       tipo: "horas",
       horas: 9,
       monto: 9 * valor,
-      desc: `Jornada ${hoyLabel()} (9-18hs)`,
+      desc: `Jornada ${label} (9-18hs)`,
     });
-    await showQuick("✓", "Jornada registrada", `9hs × ${fmt(valor)} = ${fmt(9 * valor)}`);
+    created.push(row);
+  }
+  return { count: pending.length, total: pending.length * 9 * valor, valor };
+}
+
+async function quickConfirmar() {
+  await showQuick("⏳", "Registrando jornadas...", "");
+  try {
+    const { count, total, valor } = await confirmarPendientesBatch();
+    if (count === 0) {
+      await showQuick("✓", "Nada que registrar", "No había jornadas pendientes.");
+    } else if (count === 1) {
+      await showQuick("✓", "Jornada registrada", `9hs × ${fmt(valor)} = ${fmt(total)}`);
+    } else {
+      await showQuick("✓", "Registrado", `${count} jornadas × 9hs = ${fmt(total)}`);
+    }
     setTimeout(() => window.close(), 1500);
   } catch (e) {
     await showQuick("⚠️", "Error", `No se pudo registrar: ${e.message}`);
@@ -359,10 +399,6 @@ function escapeHtml(s) {
 }
 
 // ==== Banner control diario ====
-function yaRegistroHoras(fechaISODia) {
-  return getCache().some(m => m.tipo === "horas" && m.fecha.slice(0, 10) === fechaISODia);
-}
-
 function pasoHoraControl() {
   const [hh, mm] = getCheckTime().split(":").map(Number);
   const now = new Date();
@@ -370,14 +406,30 @@ function pasoHoraControl() {
   return now >= threshold;
 }
 
-function checkConfirmBanner() {
+async function checkConfirmBanner() {
   const banner = $("banner-confirm");
-  const hoy = hoyISO();
-  if (!yaRegistroHoras(hoy) && pasoHoraControl()) {
-    banner.classList.remove("hidden");
-  } else {
+  const text = $("banner-text");
+  const now = new Date();
+
+  // Banner solo aparece en días hábiles después de la hora de control
+  if (!isWeekday(now) || !pasoHoraControl()) {
     banner.classList.add("hidden");
+    return;
   }
+
+  const pending = await pendingWeekdays();
+  if (pending.length === 0) {
+    banner.classList.add("hidden");
+    return;
+  }
+
+  if (pending.length === 1) {
+    text.textContent = "¿Trabajaste hoy 9 a 18hs?";
+  } else {
+    const dates = pending.map(fmtDiaMes).join(", ");
+    text.textContent = `${pending.length} jornadas pendientes: ${dates}`;
+  }
+  banner.classList.remove("hidden");
 }
 
 let bannerInterval = null;
@@ -405,9 +457,21 @@ function promptHorasCustom() {
   $("banner-confirm").classList.add("hidden");
 }
 
-$("btn-confirm-si").addEventListener("click", () => {
-  agregarHoras(9, `Jornada ${hoyLabel()} (9-18hs)`);
-  $("banner-confirm").classList.add("hidden");
+$("btn-confirm-si").addEventListener("click", async () => {
+  $("btn-confirm-si").disabled = true;
+  try {
+    const { count } = await confirmarPendientesBatch();
+    if (count > 0) {
+      await syncFromSupabase();
+      $("banner-confirm").classList.add("hidden");
+    } else {
+      alert("No hay jornadas pendientes");
+    }
+  } catch (e) {
+    alert("Error: " + e.message);
+  } finally {
+    $("btn-confirm-si").disabled = false;
+  }
 });
 $("btn-confirm-editar").addEventListener("click", promptHorasCustom);
 
@@ -451,10 +515,14 @@ if ("serviceWorker" in navigator) {
 
 // ==== Boot ====
 (async () => {
+  // Migrar horario del control si venía de versiones anteriores (20:27, 20:30)
+  const prev = localStorage.getItem(KEY_CHECK);
+  if (prev === "20:27" || prev === "20:30") setCheckTime("18:00");
+
   const action = new URLSearchParams(location.search).get("action");
   history.replaceState({}, "", location.pathname);
-  if (action === "confirm9to18") {
-    await quickConfirm9a18();
+  if (action === "confirmar" || action === "confirm9to18") {
+    await quickConfirmar();
     return;
   }
   if (action === "editar") {

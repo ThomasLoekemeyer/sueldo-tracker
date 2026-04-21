@@ -2,8 +2,9 @@ name: Control diario (ntfy)
 
 on:
   schedule:
-    # 20:30 AR = 23:30 UTC (Argentina es UTC-3, sin DST)
-    - cron: "30 23 * * *"
+    # 18, 19, 20, 21, 22, 23 hs AR = 21, 22, 23, 0, 1, 2 UTC (AR es UTC-3)
+    # Reintenta cada hora hasta confirmación o hasta 23hs.
+    - cron: "0 21,22,23,0,1,2 * * *"
   workflow_dispatch:
 
 permissions:
@@ -13,16 +14,75 @@ jobs:
   notify:
     runs-on: ubuntu-latest
     steps:
-      - name: Enviar notificación ntfy
+      - name: Notificar jornadas pendientes (skip fin de semana)
         env:
           TOPIC: ${{ secrets.NTFY_TOPIC }}
           APP_URL: https://thomasloekemeyer.github.io/sueldo-tracker/
+          SB_URL: https://ljwlanwmnuqgxftlirhh.supabase.co
+          SB_KEY: sb_publishable_niVre5BYps9QZVh4qq0UtQ_mMmCrIV0
         run: |
-          FECHA=$(TZ=America/Argentina/Buenos_Aires date +%d/%m)
+          # Skip fin de semana en hora AR
+          DOW_AR=$(TZ=America/Argentina/Buenos_Aires date +%u)
+          if [ "$DOW_AR" -gt 5 ]; then
+            echo "Fin de semana AR (DOW=$DOW_AR), skip."
+            exit 0
+          fi
+
+          TODAY=$(TZ=America/Argentina/Buenos_Aires date +%Y-%m-%d)
+
+          # Última jornada registrada
+          LAST=$(curl -fsS \
+            -H "apikey: ${SB_KEY}" \
+            -H "Authorization: Bearer ${SB_KEY}" \
+            "${SB_URL}/rest/v1/movimientos?select=fecha&tipo=eq.horas&order=fecha.desc&limit=1" \
+            | jq -r '.[0].fecha // ""')
+
+          # Día de inicio: day after last, o today si no hay ninguna
+          if [ -z "$LAST" ]; then
+            START="$TODAY"
+          else
+            LAST_DATE=$(echo "$LAST" | cut -d'T' -f1)
+            START=$(date -d "$LAST_DATE + 1 day" +%Y-%m-%d)
+          fi
+
+          # Listar días hábiles pendientes de START a TODAY
+          PENDING_LIST=""
+          PENDING_COUNT=0
+          D="$START"
+          END=$(date -d "$TODAY + 1 day" +%Y-%m-%d)
+          while [[ "$D" < "$END" ]]; do
+            DOW=$(date -d "$D" +%u)
+            if [ "$DOW" -le 5 ]; then
+              DMY=$(date -d "$D" +%d/%m)
+              if [ -z "$PENDING_LIST" ]; then
+                PENDING_LIST="$DMY"
+              else
+                PENDING_LIST="${PENDING_LIST}, ${DMY}"
+              fi
+              PENDING_COUNT=$((PENDING_COUNT + 1))
+            fi
+            D=$(date -d "$D + 1 day" +%Y-%m-%d)
+          done
+
+          echo "AR ${TODAY} — pendientes: ${PENDING_COUNT} (${PENDING_LIST})"
+
+          if [ "$PENDING_COUNT" -eq 0 ]; then
+            echo "Sin jornadas pendientes."
+            exit 0
+          fi
+
+          if [ "$PENDING_COUNT" -eq 1 ]; then
+            TITLE="Trabajo ${PENDING_LIST}"
+            BODY="Trabajaste 9 a 18hs?"
+          else
+            TITLE="${PENDING_COUNT} jornadas pendientes"
+            BODY="Faltan: ${PENDING_LIST}. Confirmar registra todas."
+          fi
+
           curl -fsS -X POST "https://ntfy.sh/${TOPIC}" \
-            -H "Title: Trabajo ${FECHA}" \
+            -H "Title: ${TITLE}" \
             -H "Priority: high" \
             -H "Tags: briefcase,alarm_clock" \
             -H "Click: ${APP_URL}" \
-            -H "Actions: view, Confirmar, ${APP_URL}?action=confirm9to18, clear=true; view, Editar, ${APP_URL}?action=editar, clear=true" \
-            -d "Trabajaste 9 a 18hs?"
+            -H "Actions: view, Confirmar, ${APP_URL}?action=confirmar, clear=true; view, Editar, ${APP_URL}?action=editar, clear=true" \
+            -d "${BODY}"
