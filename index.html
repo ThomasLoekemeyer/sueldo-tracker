@@ -14,6 +14,24 @@
 </head>
 <body>
 
+<div id="ticker-detail-screen" class="screen hidden">
+  <header>
+    <button id="btn-td-back" class="icon-btn" aria-label="Volver">←</button>
+    <div style="flex:1">
+      <div class="label">Detalle</div>
+      <div id="td-ticker" class="saldo">—</div>
+      <div id="td-stats" class="label" style="margin-top:4px">—</div>
+    </div>
+  </header>
+  <section class="list-section">
+    <div class="list-header">
+      <h2>Lotes (compras y ventas)</h2>
+    </div>
+    <ul id="td-list"></ul>
+    <p class="hint">✎ edita, ✕ borra. Las ventas tienen cantidad negativa.</p>
+  </section>
+</div>
+
 <div id="inversiones-screen" class="screen hidden">
   <header>
     <button id="btn-inv-back" class="icon-btn" aria-label="Volver">←</button>
