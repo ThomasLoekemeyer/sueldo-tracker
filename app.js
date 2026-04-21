@@ -1,5 +1,5 @@
 // ==== Config ====
-const APP_VERSION = "1.3";
+const APP_VERSION = "1.4";
 const SB_URL = "https://ljwlanwmnuqgxftlirhh.supabase.co";
 const SB_KEY = "sb_publishable_niVre5BYps9QZVh4qq0UtQ_mMmCrIV0";
 
@@ -380,6 +380,7 @@ const inputTicker = $("input-ticker");
 const inputCantidad = $("input-cantidad");
 const inputPrecio = $("input-precio");
 const inputFecha = $("input-fecha");
+const inputFechaMov = $("input-fecha-mov");
 const fieldsDefault = document.querySelector(".fields-default");
 const fieldsCompra = document.querySelector(".fields-compra");
 
@@ -390,6 +391,7 @@ function setTipo(t) {
   if (fieldsDefault) fieldsDefault.classList.toggle("hidden", isCompra);
   if (fieldsCompra) fieldsCompra.classList.toggle("hidden", !isCompra);
   if (isCompra && inputFecha && !inputFecha.value) inputFecha.value = hoyISO();
+  if (!isCompra && inputFechaMov && !inputFechaMov.value) inputFechaMov.value = hoyISO();
 }
 tabs.forEach(tab => tab.addEventListener("click", () => setTipo(tab.dataset.tipo)));
 
@@ -415,10 +417,13 @@ $("form-add").addEventListener("submit", async (e) => {
       await handleCompraSubmit();
     } else {
       const monto = Number(inputValor.value);
-      if (!monto || monto <= 0) return;
+      if (!monto || monto <= 0) { alert("Monto inválido"); return; }
+      const fechaStr = inputFechaMov.value || hoyISO();
+      if (!fechaStr) { alert("Falta la fecha"); return; }
       const desc = inputDesc.value.trim() || tipoActivo;
+      const fechaIso = `${fechaStr} 12:00:00-03:00`;
       const created = await sbInsert({
-        fecha: new Date().toISOString(),
+        fecha: fechaIso,
         tipo: tipoActivo,
         horas: null,
         monto,
@@ -430,6 +435,7 @@ $("form-add").addEventListener("submit", async (e) => {
       render();
       inputValor.value = "";
       inputDesc.value = "";
+      inputFechaMov.value = hoyISO();
     }
   } catch (err) {
     alert("No se pudo guardar: " + err.message);
@@ -438,14 +444,61 @@ $("form-add").addEventListener("submit", async (e) => {
   }
 });
 
+async function fetchPrecioHistorico(ticker, fechaStr) {
+  const symbol = ticker === "USD" ? "ARS=X" : `${ticker}.BA`;
+  const fecha = new Date(fechaStr + "T12:00:00-03:00").getTime() / 1000;
+  const start = Math.floor(fecha - 86400 * 5);
+  const end = Math.floor(fecha + 86400 * 2);
+  const targetUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?period1=${start}&period2=${end}&interval=1d`;
+
+  async function tryFetch(url) {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(res.status);
+    return res.json();
+  }
+
+  let data;
+  try {
+    data = await tryFetch(targetUrl);
+  } catch {
+    try {
+      data = await tryFetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`);
+    } catch {
+      return null;
+    }
+  }
+
+  const result = data?.chart?.result?.[0];
+  if (!result) return null;
+  const timestamps = result.timestamp || [];
+  const closes = result.indicators?.quote?.[0]?.close || [];
+  let best = null, bestDiff = Infinity;
+  for (let i = 0; i < timestamps.length; i++) {
+    if (closes[i] == null) continue;
+    const diff = Math.abs(timestamps[i] - fecha);
+    if (diff < bestDiff) { bestDiff = diff; best = closes[i]; }
+  }
+  return best;
+}
+
 async function handleCompraSubmit() {
   const ticker = inputTicker.value.trim().toUpperCase();
   const cantidad = Number(inputCantidad.value);
-  const precio = Number(inputPrecio.value);
+  let precio = Number(inputPrecio.value);
   const fechaStr = inputFecha.value || hoyISO();
   if (!ticker) { alert("Falta el ticker"); return; }
   if (!cantidad || cantidad <= 0) { alert("Cantidad inválida"); return; }
-  if (!precio || precio <= 0) { alert("Precio inválido"); return; }
+  if (!fechaStr) { alert("Falta la fecha"); return; }
+
+  if (!precio || precio <= 0) {
+    const btn = document.querySelector("#form-add button[type=submit]");
+    if (btn) btn.textContent = "Buscando precio...";
+    const lookup = await fetchPrecioHistorico(ticker, fechaStr);
+    if (btn) btn.textContent = "Agregar";
+    if (!lookup) { alert(`No pude obtener el precio de ${ticker} para ${fechaStr}. Ingresalo a mano.`); return; }
+    precio = lookup;
+    if (!confirm(`Precio encontrado para ${ticker} el ${fechaStr}: ${fmt(precio)}/u. ¿Usar este?`)) return;
+  }
 
   const total = cantidad * precio;
   if (!confirm(`Comprar ${cantidad} ${ticker} a ${fmt(precio)}/u = ${fmt(total)} (se descuenta del saldo). ¿Confirmar?`)) return;
@@ -978,6 +1031,10 @@ if ("serviceWorker" in navigator) {
   const el = document.getElementById("app-version");
   if (el) el.textContent = "v" + APP_VERSION;
 })();
+
+// Inicializar fechas por default a hoy
+if (inputFechaMov) inputFechaMov.value = hoyISO();
+if (inputFecha) inputFecha.value = hoyISO();
 
 // ==== Boot ====
 (async () => {

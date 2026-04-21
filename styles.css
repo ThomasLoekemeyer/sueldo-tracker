@@ -69,10 +69,10 @@ header {
   white-space: nowrap;
 }
 .header-btn:active { background: var(--surface-2); }
-.fields-compra { display: flex; flex-direction: column; gap: 12px; }
-.fields-compra .field { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 0; }
-.fields-compra .field-row { display: flex; gap: 10px; }
-.fields-compra label {
+.fields-default, .fields-compra { display: flex; flex-direction: column; gap: 12px; }
+.field { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 0; }
+.field-row { display: flex; gap: 10px; }
+.field label {
   font-size: 11px;
   color: var(--muted);
   text-transform: uppercase;
@@ -80,14 +80,9 @@ header {
   padding-left: 4px;
   font-weight: 600;
 }
-.fields-compra input {
-  width: 100%;
-}
-.fields-compra input[type="date"] {
-  color-scheme: dark;
-  font-variant-numeric: tabular-nums;
-}
-.fields-compra #input-ticker {
+.field input { width: 100%; }
+.field input[type="date"] { color-scheme: dark; font-variant-numeric: tabular-nums; }
+#input-ticker {
   text-transform: uppercase;
   letter-spacing: 0.05em;
   font-weight: 600;

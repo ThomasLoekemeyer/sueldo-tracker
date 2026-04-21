@@ -100,11 +100,21 @@
     </div>
     <form id="form-add">
       <div class="fields-default">
-        <div class="row">
-          <input type="number" id="input-valor" step="100" min="0" placeholder="Monto" inputmode="decimal">
-          <span class="suffix">$</span>
+        <div class="field">
+          <label for="input-valor">Monto</label>
+          <div class="row">
+            <input type="number" id="input-valor" step="100" min="0" placeholder="0" inputmode="decimal">
+            <span class="suffix">$</span>
+          </div>
         </div>
-        <input type="text" id="input-desc" placeholder="Descripción (opcional)">
+        <div class="field">
+          <label for="input-fecha-mov">Fecha</label>
+          <input type="date" id="input-fecha-mov">
+        </div>
+        <div class="field">
+          <label for="input-desc">Descripción (opcional)</label>
+          <input type="text" id="input-desc" placeholder="Detalle">
+        </div>
       </div>
       <div class="fields-compra hidden">
         <div class="field">
