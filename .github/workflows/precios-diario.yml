@@ -1,0 +1,63 @@
+name: Actualizar precios CEDEARs
+
+on:
+  schedule:
+    # Lunes-Viernes 20:00 AR = 23:00 UTC (después de cierre NYSE)
+    - cron: "0 23 * * 1-5"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fetch USD prices from Yahoo Finance and upsert to Supabase
+        env:
+          SB_URL: https://ljwlanwmnuqgxftlirhh.supabase.co
+          SB_KEY: sb_publishable_niVre5BYps9QZVh4qq0UtQ_mMmCrIV0
+        run: |
+          # Tickers únicos del usuario (excluir USD cash)
+          TICKERS=$(curl -fsS \
+            -H "apikey: ${SB_KEY}" \
+            -H "Authorization: Bearer ${SB_KEY}" \
+            "${SB_URL}/rest/v1/inversiones?select=ticker&tipo_activo=neq.usd" \
+            | jq -r '[.[].ticker] | unique | .[]')
+
+          UA="Mozilla/5.0 (compatible; SueldoTracker/1.0)"
+          OK=0
+          FAIL=0
+
+          for TICKER in $TICKERS; do
+            # Mapping local ticker → símbolo Yahoo (NYSE/NASDAQ)
+            case "$TICKER" in
+              BRKB) YS="BRK-B" ;;
+              PAMPX) YS="PAM" ;;
+              *) YS="$TICKER" ;;
+            esac
+            echo "=== ${TICKER} (Yahoo: ${YS}) ==="
+
+            RESP=$(curl -fsS --max-time 15 -H "User-Agent: ${UA}" \
+              "https://query1.finance.yahoo.com/v8/finance/chart/${YS}?interval=1d&range=5d" 2>&1) || RESP=""
+            PRECIO=$(echo "$RESP" | jq -r '.chart.result[0].meta.regularMarketPrice // empty' 2>/dev/null)
+
+            if [ -z "$PRECIO" ] || [ "$PRECIO" = "null" ]; then
+              echo "  ⚠️ sin precio"
+              FAIL=$((FAIL + 1))
+              continue
+            fi
+
+            echo "  USD ${PRECIO}"
+
+            curl -fsS -X POST "${SB_URL}/rest/v1/precios_actuales" \
+              -H "apikey: ${SB_KEY}" \
+              -H "Authorization: Bearer ${SB_KEY}" \
+              -H "Content-Type: application/json" \
+              -H "Prefer: resolution=merge-duplicates" \
+              -d "{\"ticker\":\"${TICKER}\",\"precio_usd\":${PRECIO},\"actualizado_at\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}" \
+              > /dev/null
+            OK=$((OK + 1))
+          done
+
+          echo "--- Resumen: ${OK} OK, ${FAIL} fallidos ---"
