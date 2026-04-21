@@ -552,6 +552,14 @@ const invScreen = $("inversiones-screen");
 let inversionesCache = [];
 let preciosActualesCache = {}; // {ticker: {precio_ars, precio_usd}}
 
+// Ratio CEDEAR:subyacente (ej SPY: 20 CEDEARs = 1 SPY real)
+// precio_usd almacenado y de Yahoo es del subyacente, hay que dividir para convertir a unidades del usuario.
+const RATIOS = {
+  SPY: 20, BRKB: 22, XLF: 2, XLE: 2, GGAL: 10,
+  CEPU: 10, PAMPX: 25, YPF: 1, AAPL: 10, KO: 10, AMZN: 20, MSFT: 20,
+};
+const ratioDe = (t) => RATIOS[t] || 1;
+
 async function sbFetchInversiones() {
   try {
     const res = await fetch(`${SB_URL}/rest/v1/inversiones?select=*&order=fecha.desc`, { headers: sbHeaders });
@@ -651,14 +659,15 @@ function renderInversiones() {
       const currUsd = curr?.precio_usd ? Number(curr.precio_usd) : null;
       const currArs = curr?.precio_ars ? Number(curr.precio_ars) : null;
 
-      // Valor actual estimado en USD
+      // Valor actual estimado en USD (aplicando ratio CEDEAR → subyacente)
+      const ratio = ratioDe(p.ticker);
       let valorUsd = null;
       if (p.tipo_activo === "usd") {
         valorUsd = p.cantidad; // 1 USD = 1 USD
       } else if (currUsd !== null) {
-        valorUsd = p.cantidad * currUsd;
+        valorUsd = (p.cantidad / ratio) * currUsd;
       } else if (p.promUsd !== null) {
-        valorUsd = p.cantidad * p.promUsd; // fallback: costo
+        valorUsd = (p.cantidad / ratio) * p.promUsd; // fallback: a costo
       }
       if (valorUsd !== null) totalUsd += valorUsd;
 
@@ -670,18 +679,20 @@ function renderInversiones() {
 
       const li = document.createElement("li");
       const tickerLabel = p.tipo_activo === "usd" ? "USD cash" : p.ticker;
-      const cantLabel = p.tipo_activo === "usd" ? `${Math.round(p.cantidad).toLocaleString("es-AR")} USD` : `${p.cantidad} unid`;
-      const costUsdLabel = p.promUsd !== null ? `cpc USD ${p.promUsd.toFixed(2)}` : "";
-      const costArsLabel = p.promArs !== null ? `cpc ARS ${Math.round(p.promArs).toLocaleString("es-AR")}` : "";
-      const currLabel = currUsd !== null
-        ? `USD ${currUsd.toFixed(2)}${pl !== null ? ` (${pl >= 0 ? "+" : ""}${pl.toFixed(1)}%)` : ""}`
-        : "—";
+      const ratioLabel = p.tipo_activo === "cedear" && ratio > 1 ? ` (${ratio}:1)` : "";
+      const cantLabel = p.tipo_activo === "usd"
+        ? `${Math.round(p.cantidad).toLocaleString("es-AR")} USD`
+        : `${p.cantidad} unid`;
+      const valorLabel = valorUsd !== null ? `USD ${Math.round(valorUsd).toLocaleString("es-AR")}` : "—";
+      const plLabel = pl !== null ? ` ${pl >= 0 ? "+" : ""}${pl.toFixed(1)}%` : "";
+      const costSubyacente = p.promUsd !== null ? `compra USD ${p.promUsd.toFixed(2)}/u subyacente` : "";
+      const currSubyacente = currUsd !== null ? `hoy USD ${currUsd.toFixed(2)}/u subyacente` : "";
       li.innerHTML = `
         <div class="mov-info">
-          <div class="mov-desc"><strong>${tickerLabel}</strong> · ${cantLabel}</div>
-          <div class="mov-meta">${costArsLabel}${costArsLabel && costUsdLabel ? " · " : ""}${costUsdLabel}</div>
+          <div class="mov-desc"><strong>${tickerLabel}</strong>${ratioLabel} · ${cantLabel}</div>
+          <div class="mov-meta">${costSubyacente}${costSubyacente && currSubyacente ? " · " : ""}${currSubyacente}</div>
         </div>
-        <div class="mov-monto ${pl !== null && pl < 0 ? "neg" : "pos"}">${currLabel}</div>
+        <div class="mov-monto ${pl !== null && pl < 0 ? "neg" : "pos"}">${valorLabel}<br><small>${plLabel || ""}</small></div>
       `;
       ul.appendChild(li);
     }
