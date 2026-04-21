@@ -147,7 +147,8 @@ async function quickConfirm9a18() {
   await showQuick("⏳", "Registrando jornada...", "");
   try {
     if (await sbHasHorasToday()) {
-      await showQuick("✓", "Ya estaba registrada", "Tu jornada de hoy ya estaba cargada. Cerrá esta pestaña.");
+      await showQuick("✓", "Ya estaba registrada", "Tu jornada de hoy ya estaba cargada.");
+      setTimeout(() => window.close(), 1500);
       return;
     }
     const valor = getValorHora();
@@ -158,7 +159,8 @@ async function quickConfirm9a18() {
       monto: 9 * valor,
       desc: `Jornada ${hoyLabel()} (9-18hs)`,
     });
-    await showQuick("✓", "Jornada registrada", `9hs × ${fmt(valor)} = ${fmt(9 * valor)}. Cerrá esta pestaña.`);
+    await showQuick("✓", "Jornada registrada", `9hs × ${fmt(valor)} = ${fmt(9 * valor)}`);
+    setTimeout(() => window.close(), 1500);
   } catch (e) {
     await showQuick("⚠️", "Error", `No se pudo registrar: ${e.message}`);
   }
@@ -180,7 +182,8 @@ async function quickEditar() {
       monto: h * valor,
       desc,
     });
-    await showQuick("✓", "Jornada registrada", `${h}hs × ${fmt(valor)} = ${fmt(h * valor)}. Cerrá esta pestaña.`);
+    await showQuick("✓", "Jornada registrada", `${h}hs × ${fmt(valor)} = ${fmt(h * valor)}`);
+    setTimeout(() => window.close(), 1500);
   } catch (e) {
     await showQuick("⚠️", "Error", `No se pudo registrar: ${e.message}`);
   }
