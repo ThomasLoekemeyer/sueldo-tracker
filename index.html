@@ -101,13 +101,15 @@
     </div>
     <form id="form-add">
       <div class="fields-default">
-        <div class="field">
-          <label for="input-valor">Monto</label>
-          <input type="number" id="input-valor" step="100" min="0" placeholder="$0" inputmode="decimal">
-        </div>
-        <div class="field">
-          <label for="input-fecha-mov">Fecha</label>
-          <input type="date" id="input-fecha-mov">
+        <div class="field-row">
+          <div class="field">
+            <label for="input-valor">Monto</label>
+            <input type="number" id="input-valor" step="100" min="0" placeholder="$0" inputmode="decimal">
+          </div>
+          <div class="field">
+            <label for="input-fecha-mov">Fecha</label>
+            <input type="date" id="input-fecha-mov">
+          </div>
         </div>
         <div class="field">
           <label for="input-desc">Descripción (opcional)</label>
@@ -115,9 +117,15 @@
         </div>
       </div>
       <div class="fields-compra hidden">
-        <div class="field">
-          <label for="input-ticker">Ticker</label>
-          <input type="text" id="input-ticker" placeholder="SPY, BRKB, USD..." autocomplete="off" autocapitalize="characters">
+        <div class="field-row">
+          <div class="field">
+            <label for="input-ticker">Ticker</label>
+            <input type="text" id="input-ticker" placeholder="SPY, BRKB..." autocomplete="off" autocapitalize="characters">
+          </div>
+          <div class="field">
+            <label for="input-fecha">Fecha de compra</label>
+            <input type="date" id="input-fecha">
+          </div>
         </div>
         <div class="field-row">
           <div class="field">
@@ -128,10 +136,6 @@
             <label for="input-precio">Precio ARS / unidad</label>
             <input type="number" id="input-precio" step="0.01" placeholder="0" inputmode="decimal">
           </div>
-        </div>
-        <div class="field">
-          <label for="input-fecha">Fecha de compra</label>
-          <input type="date" id="input-fecha">
         </div>
         <div id="preview-total" class="preview-total"></div>
       </div>
