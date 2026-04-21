@@ -70,8 +70,8 @@ header {
 }
 .header-btn:active { background: var(--surface-2); }
 .fields-default, .fields-compra { display: flex; flex-direction: column; gap: 12px; }
-.field { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 0; }
-.field-row { display: flex; gap: 10px; }
+.field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .field label {
   font-size: 11px;
   color: var(--muted);
@@ -82,13 +82,17 @@ header {
 }
 .field input {
   width: 100%;
+  min-width: 0;
   box-sizing: border-box;
   margin: 0;
 }
 .field input[type="date"] {
   color-scheme: dark;
   font-variant-numeric: tabular-nums;
-  min-height: 50px; /* match number input height */
+  font-size: 15px;
+  padding: 14px 10px;
+  min-height: 50px;
+  -webkit-appearance: none;
 }
 .collapsible.collapsed ul { display: none; }
 .collapsible #mov-toggle {
