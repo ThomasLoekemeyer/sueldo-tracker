@@ -1,5 +1,5 @@
 // ==== Config ====
-const APP_VERSION = "1.9";
+const APP_VERSION = "1.10";
 const SB_URL = "https://ljwlanwmnuqgxftlirhh.supabase.co";
 const SB_KEY = "sb_publishable_niVre5BYps9QZVh4qq0UtQ_mMmCrIV0";
 
@@ -1136,12 +1136,21 @@ function renderValorHora() {
     return;
   }
   const sorted = [...valoresHoraCache].sort((a, b) => b.mes.localeCompare(a.mes));
-  for (const v of sorted) {
+  for (let i = 0; i < sorted.length; i++) {
+    const v = sorted[i];
+    const prev = sorted[i + 1]; // siguiente en desc = mes anterior
+    let pctLabel = "";
+    let pctClass = "pos";
+    if (prev && Number(prev.valor) > 0) {
+      const pct = ((Number(v.valor) - Number(prev.valor)) / Number(prev.valor)) * 100;
+      const signo = pct >= 0 ? "+" : "";
+      pctLabel = `<span class="mov-meta" style="font-weight:600;color:${pct < 0 ? 'var(--danger)' : 'var(--accent)'}">${signo}${pct.toFixed(1)}%</span>`;
+    }
     const li = document.createElement("li");
     li.innerHTML = `
       <div class="mov-info">
         <div class="mov-desc">${mesLabel(v.mes)}</div>
-        <div class="mov-meta">${v.mes}</div>
+        <div class="mov-meta">${v.mes}${pctLabel ? ' · ' + pctLabel : ''}</div>
       </div>
       <div class="mov-monto pos">${fmt(v.valor)}</div>
       <button class="mov-delete" data-mes="${v.mes}" aria-label="Editar">✎</button>
