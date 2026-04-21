@@ -1,5 +1,5 @@
 // ==== Config ====
-const APP_VERSION = "1.4";
+const APP_VERSION = "1.5";
 const SB_URL = "https://ljwlanwmnuqgxftlirhh.supabase.co";
 const SB_KEY = "sb_publishable_niVre5BYps9QZVh4qq0UtQ_mMmCrIV0";
 
@@ -927,9 +927,56 @@ async function agregarInversion() {
   }
 }
 
+async function sbPatchInversion(id, fields) {
+  const res = await fetch(`${SB_URL}/rest/v1/inversiones?id=eq.${id}`, {
+    method: "PATCH",
+    headers: { ...sbHeaders, Prefer: "return=minimal" },
+    body: JSON.stringify(fields),
+  });
+  if (!res.ok) throw new Error(`patch ${res.status}`);
+}
+
+async function backfillPrecios() {
+  const pendientes = inversionesCache.filter(r => {
+    const p = Number(r.precio_ars);
+    return !p || p <= 0;
+  });
+  if (!pendientes.length) { alert("Todas las transacciones ya tienen precio."); return; }
+  if (!confirm(`Buscar precio en Yahoo Finance para ${pendientes.length} transacción(es) sin precio?`)) return;
+
+  const btn = $("btn-inv-backfill");
+  btn.disabled = true;
+  const origLbl = btn.textContent;
+
+  let ok = 0, fail = 0;
+  for (let i = 0; i < pendientes.length; i++) {
+    const r = pendientes[i];
+    btn.textContent = `${i + 1}/${pendientes.length}...`;
+    const fechaStr = new Date(r.fecha).toISOString().slice(0, 10);
+    try {
+      const precio = await fetchPrecioHistorico(r.ticker, fechaStr);
+      if (precio && precio > 0) {
+        await sbPatchInversion(r.id, { precio_ars: precio });
+        ok++;
+      } else {
+        fail++;
+      }
+    } catch (e) {
+      fail++;
+    }
+  }
+
+  btn.textContent = origLbl;
+  btn.disabled = false;
+  alert(`Completado: ${ok} actualizadas, ${fail} sin datos/error.`);
+  await sbFetchInversiones();
+  renderInversiones();
+}
+
 $("btn-open-inv").addEventListener("click", openInversiones);
 $("btn-inv-back").addEventListener("click", closeInversiones);
 $("btn-inv-add").addEventListener("click", agregarInversion);
+$("btn-inv-backfill").addEventListener("click", backfillPrecios);
 
 // ==== Valor hora screen ====
 const vhScreen = $("valor-hora-screen");
@@ -1060,5 +1107,16 @@ if (inputFecha) inputFecha.value = hoyISO();
     await quickComision();
     return;
   }
+
+  // Si ya hay Face ID configurado, intentar desbloquear automáticamente al abrir
   showLock();
+  if (localStorage.getItem(KEY_CRED)) {
+    try {
+      await authFaceId();
+      await showApp();
+    } catch (e) {
+      // Falló (user canceló o iOS bloqueó por falta de activation): queda en lock screen
+      lockError.textContent = "Tocá Desbloquear para reintentar.";
+    }
+  }
 })();
